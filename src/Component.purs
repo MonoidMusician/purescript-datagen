@@ -1,35 +1,22 @@
 module Component where
 
 import Prelude
-import DOM.Event.Event as Event
-import DOM.HTML.HTMLInputElement as HInput
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.HTML.Lens as HL
 import Control.Monad.Aff (Aff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Except (runExcept)
 import DOM (DOM)
-import DOM.Event.Types (Event)
-import DOM.HTML.Types (readHTMLInputElement)
 import Data.Array (filter, foldr, intercalate)
 import Data.Array as Array
 import Data.Char (toUpper)
-import Data.Either (Either(..))
-import Data.Foreign (toForeign)
-import Data.Lens (lens, (.~))
-import Data.Lens.Getter ((^.))
-import Data.Lens.Types (Lens')
 import Data.Maybe (Maybe(..))
 import Data.String (joinWith, singleton, uncons)
 import Data.String.Utils (words)
 
-data Query a
-    = LensSetAff (forall eff. Eff (dom :: DOM | eff) (State -> State)) a
+type Query = HL.Query State
 
-type Property p = H.IProp p Query
-type AnyProperty = forall p. Property p
 type Element p = H.HTML p Query
 
 type State =
@@ -37,11 +24,11 @@ type State =
   , name :: String
   }
 
-descriptionL :: Lens' State String
-descriptionL = lens (_.description) (\s d -> s { description = d })
+descriptionL :: HL.Lens' State String
+descriptionL = HL.lens (_.description) (\s d -> s { description = d })
 
-nameL :: Lens' State String
-nameL = lens (_.name) (\s d -> s { name = d })
+nameL :: HL.Lens' State String
+nameL = HL.lens (_.name) (\s d -> s { name = d })
 
 toName :: String -> String
 toName = words >>> exclude >>> map camel >>> joinWith ""
@@ -55,67 +42,14 @@ toName = words >>> exclude >>> map camel >>> joinWith ""
             Just { head, tail } ->
                 (head # toUpper # singleton) <> tail
 
-suggest ::
-    forall s a b.
-    Eq b =>
-    Lens' s a ->
-    (a -> b) ->
-    Lens' s b ->
-    (s -> a -> s)
-suggest main convert goal state value
-    | (state ^. main # convert) == state ^. goal
-    = main .~ value $ goal .~ (convert value) $ state
-    | otherwise = main .~ value $ state
-
-suggestL ::
-    forall s a b.
-    Eq b =>
-    Lens' s a ->
-    (a -> b) ->
-    Lens' s b ->
-    Lens' s a
-suggestL main convert goal =
-    lens (_ ^. main) (suggest main convert goal)
-
-suggestDescriptionL :: Lens' State String
---suggestDescriptionL = lens (_.description) suggestDescription
-suggestDescriptionL = suggestL descriptionL toName nameL
-
-inputlensset :: forall s eff. Lens' s String -> Event -> Eff (dom :: DOM | eff) (s -> s)
-inputlensset lens e =
-    case runExcept $ readHTMLInputElement $ toForeign $ Event.target e of
-        Left _ -> pure id
-        Right node -> do
-            value <- H.liftEff $ HInput.value node
-            pure (lens .~ value)
-
-inputlensquery :: forall a. Lens' State String -> Event -> a -> Query a
-inputlensquery lens e = LensSetAff (inputlensset lens e)
-
-inputlensattr :: forall p. Lens' State String -> Property (onInput :: Event | p)
-inputlensattr lens = HE.onInput (HE.input (inputlensquery lens))
-
-inputlens :: forall p. Lens' State String -> State -> Element p
-inputlens lens state = HH.input
-    [ inputlensattr lens
-    , HP.value (state ^. lens)
-    ]
-
-fieldlens :: forall p. String -> Lens' State String -> State -> Element p
-fieldlens label lens state =
-    HH.div_
-        [ HH.text (label <> ": ")
-        , inputlens lens state
-        , HH.text if value == "" then ""
-          else " (" <> value <> ")"
-        ]
-    where value = state ^. lens
+suggestDescriptionL :: HL.Lens' State String
+suggestDescriptionL = HL.suggestionLens descriptionL toName nameL
 
 descriptionComponent :: forall p. State -> Element p
-descriptionComponent = fieldlens "Description" suggestDescriptionL
+descriptionComponent = HL.fieldHTML "Description" suggestDescriptionL
 
 nameComponent :: forall p. State -> Element p
-nameComponent = fieldlens "Name" nameL
+nameComponent = HL.fieldHTML "Name" nameL
 
 component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
 component =
@@ -147,10 +81,7 @@ component =
       ]
 
   eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
-  eval (LensSetAff run next) = do
-    reset <- H.liftEff run
-    H.modify reset
-    pure next
+  eval = HL.eval
 
 texts :: forall p. Array String -> Array (Element p)
 texts = map HH.text
