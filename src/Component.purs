@@ -6,12 +6,14 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.HTML.Lens as HL
+import Halogen.HTML.Lens.Input as HL.Input
 import Control.Monad.Aff (Aff)
 import DOM (DOM)
 import Data.Array (filter, foldr, intercalate)
 import Data.Array as Array
 import Data.Char (toUpper)
 import Data.Maybe (Maybe(..))
+import Data.Lens.Suggestion (Lens', lens, suggest)
 import Data.String (joinWith, singleton, uncons)
 import Data.String.Utils (words)
 
@@ -24,11 +26,11 @@ type State =
   , name :: String
   }
 
-descriptionL :: HL.Lens' State String
-descriptionL = HL.lens (_.description) (\s d -> s { description = d })
+descriptionL :: Lens' State String
+descriptionL = lens (_.description) (\s d -> s { description = d })
 
-nameL :: HL.Lens' State String
-nameL = HL.lens (_.name) (\s d -> s { name = d })
+nameL :: Lens' State String
+nameL = lens (_.name) (\s d -> s { name = d })
 
 toName :: String -> String
 toName = words >>> exclude >>> map camel >>> joinWith ""
@@ -42,14 +44,14 @@ toName = words >>> exclude >>> map camel >>> joinWith ""
             Just { head, tail } ->
                 (head # toUpper # singleton) <> tail
 
-suggestDescriptionL :: HL.Lens' State String
-suggestDescriptionL = HL.suggestionLens descriptionL toName nameL
+suggestDescriptionL :: Lens' State String
+suggestDescriptionL = suggest descriptionL toName nameL
 
 descriptionComponent :: forall p. State -> Element p
-descriptionComponent = HL.fieldHTML "Description" suggestDescriptionL
+descriptionComponent = HL.Input.renderAsField "Description" suggestDescriptionL
 
 nameComponent :: forall p. State -> Element p
-nameComponent = HL.fieldHTML "Name" nameL
+nameComponent = HL.Input.renderAsField "Name" nameL
 
 component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
 component =
