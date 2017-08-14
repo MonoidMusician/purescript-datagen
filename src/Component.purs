@@ -4,32 +4,42 @@ import Prelude
 
 import Control.Monad.Aff (Aff)
 import DOM (DOM)
-import Data.Array (filter, foldr, intercalate)
+import Data.Array (filter, foldr, intercalate, mapWithIndex)
 import Data.Array as Array
-import Data.Char (toUpper)
+import Data.Char (fromCharCode, toUpper)
+import Data.Char.Unicode (isAlphaNum, isSpace)
+import Data.Foldable (fold)
 import Data.Lens.Suggestion (Lens', lens, suggest)
 import Data.Maybe (Maybe(..))
-import Data.String (Pattern(..), joinWith, singleton, split, uncons)
-import Data.String (toUpper, toLower) as Str
+import Data.String (joinWith, singleton, uncons)
+import Data.String.CodePoints as Str
+import Data.String.Regex (split) as Re
+import Data.String.Regex.Flags (unicode) as Re
+import Data.String.Regex.Unsafe (unsafeRegex) as Re
 import Data.String.Utils (words)
 import Halogen as H
 import Halogen.HTML as HH
-import Halogen.HTML.Events as HE
 import Halogen.HTML.Lens as HL
+import Halogen.HTML.Lens.Button as HL.Button
 import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
-import Halogen.HTML.Lens.TextArea as HL.TextArea
 import Halogen.HTML.Properties as HP
 
 type Query = HL.Query State
 
 type Element p = H.HTML p Query
 
+type Annotation =
+  { name :: String
+  , typ :: String
+  }
+
 type State =
   { description :: String
   , name :: String
   , fieldPrefix :: String
   , hasSourceAnn :: Boolean
+  , fields :: Array Annotation
   }
 
 descriptionL :: Lens' State String
@@ -44,10 +54,16 @@ fieldPrefixL = lens (_.fieldPrefix) (\s e -> s { fieldPrefix = e })
 hasSourceAnnL :: Lens' State Boolean
 hasSourceAnnL = lens (_.hasSourceAnn) (\s i -> s { hasSourceAnn = i })
 
+ccwords :: String -> Array String
+ccwords = filter (not eq "") <<< Re.split re
+  where re = Re.unsafeRegex "([A-Z][a-z]+|[A-Z]+(?=[A-Z][a-z]))" Re.unicode
+
 toName :: String -> String
-toName = words >>> exclude >>> map camel >>> joinWith ""
+toName = firstpart >>> words >>> exclude >>> map camel >>> joinWith ""
     where
-    blacklist = ["this", "the","a","an","it"]
+    unsafeChar = Str.codePointToInt >>> fromCharCode
+    firstpart = Str.takeWhile $ unsafeChar >>> (isAlphaNum || isSpace)
+    blacklist = ["this","the","a","an","it"]
     exclude ws =
         foldr (\w -> filter (not eq w <<< Str.toLower)) ws blacklist
     camel s =
@@ -56,14 +72,23 @@ toName = words >>> exclude >>> map camel >>> joinWith ""
             Just { head, tail } ->
                 (head # toUpper # singleton) <> tail
 
+toPrefix :: String -> String
+toPrefix = fold <<< ccwords >>> map case _ of
+  "Type" -> "ty"
+  "Declaration" -> "decl"
+  s -> Str.toLower (Str.take 1 s)
+
 suggestDescriptionL :: Lens' State String
-suggestDescriptionL = suggest descriptionL toName nameL
+suggestDescriptionL = suggest descriptionL toName suggestFieldPrefixL
+
+suggestFieldPrefixL :: Lens' State String
+suggestFieldPrefixL = suggest nameL toPrefix fieldPrefixL
 
 descriptionComponent :: forall p. State -> Element p
 descriptionComponent = HL.Input.renderAsField "Description" suggestDescriptionL
 
 nameComponent :: forall p. State -> Element p
-nameComponent = HL.Input.renderAsField "Name" nameL
+nameComponent = HL.Input.renderAsField "Name" suggestFieldPrefixL
 
 fieldPrefixComponent :: forall p. State -> Element p
 fieldPrefixComponent = HL.Input.renderAsField "Prefix for the fields" fieldPrefixL
@@ -87,10 +112,11 @@ component =
     , name: "TypeDeclaration"
     , fieldPrefix: "tydecl"
     , hasSourceAnn: true
+    , fields: []
     }
 
   render :: State -> H.ComponentHTML Query
-  render state@{ description, name } =
+  render state@{ description, name, fields } =
     HH.div_
       [ HH.h1_
           [ HH.text "Create PureScript Compiler Data Type" ]
@@ -98,11 +124,21 @@ component =
       , nameComponent state
       , fieldPrefixComponent state
       , hasSourceAnnComponent state
+      , HH.h2_ [ HH.text "Fields" ]
+      , HH.ol_ $ HH.li_ <<< pure <<< renderField <$> fields
+      , HH.h2_ [ HH.text "Generated code" ]
       , generateSource state
+      --, HL.Button.ren
       ]
 
   eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
   eval = HL.eval
+
+renderField :: forall p. Annotation -> Element p
+renderField = HH.text <<< showField
+
+showField :: Annotation -> String
+showField { name, typ } = name <> " :: " <> typ
 
 texts :: forall p. Array String -> Array (Element p)
 texts = map HH.text
@@ -123,7 +159,10 @@ generateSource state@{ description, name, fieldPrefix, hasSourceAnn } = HH.pre_ 
     , HH.div_ $ HH.div_ <<< pure <<< HH.text <$> record allFields
     ]
     where
-    allFields = if hasSourceAnn then [fieldPrefix <> "SourceAnn :: SourceAnn"] else []
+    allFields = if hasSourceAnn then
+      [ { name: "SourceAnn", typ: "SourceAnn" }
+      ] else []
     record [] = ["  {}"]
-    record [f] = ["  { " <> f <> " }"]
-    record fs = fs
+    record [f] = ["  { " <> fieldPrefix <> showField f <> " }"]
+    record fs = (_ <> pure "  }") $ fs # mapWithIndex \i f ->
+      (if i == 0 then "  { " else "  , ") <> fieldPrefix <> showField f
