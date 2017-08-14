@@ -9,14 +9,18 @@ import Data.Array as Array
 import Data.Char (fromCharCode, toUpper)
 import Data.Char.Unicode (isAlphaNum, isSpace)
 import Data.Foldable (fold)
+import Data.Lens (ALens', Traversal', preview, withLens, (%~), (.~), (^.))
+import Data.Lens.Index (ix)
+import Data.Lens.Record (prop)
 import Data.Lens.Suggestion (Lens', lens, suggest)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (joinWith, singleton, uncons)
 import Data.String.CodePoints as Str
 import Data.String.Regex (split) as Re
 import Data.String.Regex.Flags (unicode) as Re
 import Data.String.Regex.Unsafe (unsafeRegex) as Re
 import Data.String.Utils (words)
+import Data.Symbol (SProxy(..))
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Lens as HL
@@ -42,17 +46,20 @@ type State =
   , fields :: Array Annotation
   }
 
-descriptionL :: Lens' State String
-descriptionL = lens (_.description) (\s d -> s { description = d })
+_description :: Lens' State String
+_description = lens (_.description) (\s d -> s { description = d })
 
-nameL :: Lens' State String
-nameL = lens (_.name) (\s n -> s { name = n })
+_name :: Lens' State String
+_name = lens (_.name) (\s n -> s { name = n })
 
-fieldPrefixL :: Lens' State String
-fieldPrefixL = lens (_.fieldPrefix) (\s e -> s { fieldPrefix = e })
+_fieldPrefix :: Lens' State String
+_fieldPrefix = lens (_.fieldPrefix) (\s e -> s { fieldPrefix = e })
 
-hasSourceAnnL :: Lens' State Boolean
-hasSourceAnnL = lens (_.hasSourceAnn) (\s i -> s { hasSourceAnn = i })
+_hasSourceAnn :: Lens' State Boolean
+_hasSourceAnn = lens (_.hasSourceAnn) (\s i -> s { hasSourceAnn = i })
+
+_fields :: Lens' State (Array Annotation)
+_fields = lens _.fields _ { fields = _ }
 
 ccwords :: String -> Array String
 ccwords = filter (not eq "") <<< Re.split re
@@ -78,23 +85,26 @@ toPrefix = fold <<< ccwords >>> map case _ of
   "Declaration" -> "decl"
   s -> Str.toLower (Str.take 1 s)
 
-suggestDescriptionL :: Lens' State String
-suggestDescriptionL = suggest descriptionL toName suggestFieldPrefixL
+_suggestDescription :: Lens' State String
+_suggestDescription = suggest _description toName _suggestFieldPrefix
 
-suggestFieldPrefixL :: Lens' State String
-suggestFieldPrefixL = suggest nameL toPrefix fieldPrefixL
+_suggestFieldPrefix :: Lens' State String
+_suggestFieldPrefix = suggest _name toPrefix _fieldPrefix
 
 descriptionComponent :: forall p. State -> Element p
-descriptionComponent = HL.Input.renderAsField "Description" suggestDescriptionL
+descriptionComponent = HL.Input.renderAsField "Description" _suggestDescription
 
 nameComponent :: forall p. State -> Element p
-nameComponent = HL.Input.renderAsField "Name" suggestFieldPrefixL
+nameComponent = HL.Input.renderAsField "Name" _suggestFieldPrefix
 
 fieldPrefixComponent :: forall p. State -> Element p
-fieldPrefixComponent = HL.Input.renderAsField "Prefix for the fields" fieldPrefixL
+fieldPrefixComponent = HL.Input.renderAsField "Prefix for the fields" _fieldPrefix
 
 hasSourceAnnComponent :: forall p. State -> Element p
-hasSourceAnnComponent = HL.Checkbox.renderAsField "Contains a source annotation" hasSourceAnnL
+hasSourceAnnComponent = HL.Checkbox.renderAsField "Contains a source annotation" _hasSourceAnn
+
+addField :: State -> State
+addField s = s { fields = nonEmptyFields s.fields <> [{ name: "", typ: "" }] }
 
 component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
 component =
@@ -125,20 +135,54 @@ component =
       , fieldPrefixComponent state
       , hasSourceAnnComponent state
       , HH.h2_ [ HH.text "Fields" ]
-      , HH.ol_ $ HH.li_ <<< pure <<< renderField <$> fields
+      , HH.div_ [ HL.Button.renderAsField "Add field" addField false ]
+      , HH.ol_ $ HH.li_ <$> withLenses renderField _fields state
       , HH.h2_ [ HH.text "Generated code" ]
       , generateSource state
-      --, HL.Button.ren
       ]
 
   eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
   eval = HL.eval
 
-renderField :: forall p. Annotation -> Element p
-renderField = HH.text <<< showField
+lensDefault :: forall a b. b -> ALens' a (Maybe b) -> Lens' a b
+lensDefault b l = withLens l \getter setter ->
+  lens (getter >>> fromMaybe b) (\a -> Just >>> setter a)
+
+traversalDefault :: forall a b. b -> Traversal' a b -> Lens' a b
+traversalDefault b l = lens
+  (\v -> fromMaybe b (preview l v))
+  (\v b' -> (l .~ b') v)
+
+withLenses :: forall a b r. (Int -> a -> ALens' a b -> r) -> Lens' a (Array b) -> a -> Array r
+withLenses lenser getarr st =
+  Array.mapWithIndex (\i v -> (getarr <<< (traversalDefault v (ix i))) # lenser i st)
+    (st ^. getarr)
+
+tryDeleteAt :: Int -> Array ~> Array
+tryDeleteAt i a = Array.deleteAt i a # fromMaybe a
+
+renderField :: forall p. Int -> State -> ALens' State Annotation -> Array (Element p)
+renderField i state alens =
+  [ HL.Input.render _name state
+  , HH.text " :: "
+  , HL.Input.render _typ state
+  , HH.text " "
+  , HL.Button.renderAsField "\x2212" (_fields %~ tryDeleteAt i) false
+  ]
+  where
+    thislens :: Lens' State Annotation
+    thislens = withLens alens \a b -> lens a b
+    _name :: Lens' State String
+    _name = thislens <<< prop (SProxy :: SProxy "name")
+    _typ :: Lens' State String
+    _typ = thislens <<< prop (SProxy :: SProxy "typ")
 
 showField :: Annotation -> String
 showField { name, typ } = name <> " :: " <> typ
+
+nonEmptyFields :: Array Annotation -> Array Annotation
+nonEmptyFields = filter \{ name, typ } ->
+  name /= "" && typ /= ""
 
 texts :: forall p. Array String -> Array (Element p)
 texts = map HH.text
@@ -153,15 +197,15 @@ separate :: forall p i. HH.HTML p i -> Array (HH.HTML p i) -> HH.HTML p i
 separate sep = HH.span_ <<< intercalate [sep] <<< map Array.singleton
 
 generateSource :: forall p. State -> Element p
-generateSource state@{ description, name, fieldPrefix, hasSourceAnn } = HH.pre_ $
+generateSource state@{ description, name, fieldPrefix, hasSourceAnn, fields } = HH.pre_ $
     [ commentline description
     , HH.div_ $ pure $ from ["data ", name, " = ", name]
     , HH.div_ $ HH.div_ <<< pure <<< HH.text <$> record allFields
     ]
     where
-    allFields = if hasSourceAnn then
+    allFields = (if hasSourceAnn then
       [ { name: "SourceAnn", typ: "SourceAnn" }
-      ] else []
+      ] else []) <> nonEmptyFields fields
     record [] = ["  {}"]
     record [f] = ["  { " <> fieldPrefix <> showField f <> " }"]
     record fs = (_ <> pure "  }") $ fs # mapWithIndex \i f ->
