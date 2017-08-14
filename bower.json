@@ -11,6 +11,9 @@
   "dependencies": {
     "purescript-console": "^3.0.0",
     "purescript-halogen": "^2.0.0",
-    "purescript-stringutils": "^0.0.6"
+    "purescript-stringutils": "^0.0.6",
+    "purescript-strings": "^3.3.1",
+    "purescript-unicode": "^3.0.1",
+    "purescript-verbal-expressions": "^3.0.0"
   }
 }
