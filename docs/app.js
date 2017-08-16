@@ -1,6 +1,7 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 "use strict";
 var Control_Applicative = require("../Control.Applicative");
+var Control_Category = require("../Control.Category");
 var Control_Monad_Aff = require("../Control.Monad.Aff");
 var Control_Semigroupoid = require("../Control.Semigroupoid");
 var DOM = require("../DOM");
@@ -56,7 +57,7 @@ var traversalDefault = function (b) {
     return function (l) {
         return function (dictStrong) {
             return Data_Lens_Lens.lens(function (v) {
-                return Data_Maybe.fromMaybe(b)(Data_Lens_Fold.preview(l(Data_Lens_Internal_Forget.wanderForget(Data_Maybe_First.monoidFirst)))(v));
+                return Data_Maybe.fromMaybe(b)(Data_Lens_Fold.previewOn(v)(l(Data_Lens_Internal_Forget.wanderForget(Data_Maybe_First.monoidFirst))));
             })(function (v) {
                 return function (b$prime) {
                     return Data_Lens_Setter.set(l(Data_Lens_Internal_Wander.wanderFunction))(b$prime)(v);
@@ -70,10 +71,10 @@ var withLenses = function (lenser) {
         return function (st) {
             return Data_Array.mapWithIndex(function (i) {
                 return function (v) {
-                    return lenser(i)(st)(function ($87) {
+                    return lenser(i)(st)(function ($106) {
                         return getarr(Data_Lens_Internal_Shop.strongShop)(traversalDefault(v)(function (dictWander) {
                             return Data_Lens_Index.ix(Data_Lens_Index.indexArray)(i)(dictWander);
-                        })(Data_Lens_Internal_Shop.strongShop)($87));
+                        })(Data_Lens_Internal_Shop.strongShop)($106));
                     });
                 };
             })(Data_Lens_Getter.viewOn(st)(getarr(Data_Lens_Internal_Forget.strongForget)));
@@ -81,11 +82,11 @@ var withLenses = function (lenser) {
     };
 };
 var toName = (function () {
-    var unsafeChar = function ($88) {
-        return Data_Char.fromCharCode(Data_String_CodePoints.codePointToInt($88));
+    var unsafeChar = function ($107) {
+        return Data_Char.fromCharCode(Data_String_CodePoints.codePointToInt($107));
     };
-    var firstpart = Data_String_CodePoints.takeWhile(function ($89) {
-        return Data_HeytingAlgebra.disj(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraBoolean))(Data_Char_Unicode.isAlphaNum)(Data_Char_Unicode.isSpace)(unsafeChar($89));
+    var firstpart = Data_String_CodePoints.takeWhile(function ($108) {
+        return Data_HeytingAlgebra.disj(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraBoolean))(Data_Char_Unicode.isAlphaNum)(Data_Char_Unicode.isSpace)(unsafeChar($108));
     });
     var camel = function (s) {
         var v = Data_String.uncons(s);
@@ -100,192 +101,96 @@ var toName = (function () {
     var blacklist = [ "this", "the", "a", "an", "it" ];
     var exclude = function (ws) {
         return Data_Foldable.foldr(Data_Foldable.foldableArray)(function (w) {
-            return Data_Array.filter(function ($90) {
-                return Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraBoolean)))(Data_Eq.eq(Data_Eq.eqString))(w)(Data_String.toLower($90));
+            return Data_Array.filter(function ($109) {
+                return Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraBoolean)))(Data_Eq.eq(Data_Eq.eqString))(w)(Data_String.toLower($109));
             });
         })(ws)(blacklist);
     };
-    return function ($91) {
-        return (function ($92) {
-            return Data_String.joinWith("")(Data_Functor.map(Data_Functor.functorArray)(camel)(exclude($92)));
-        })(Data_String_Utils.words(firstpart($91)));
+    return function ($110) {
+        return (function ($111) {
+            return Data_String.joinWith("")(Data_Functor.map(Data_Functor.functorArray)(camel)(exclude($111)));
+        })(Data_String_Utils.words(firstpart($110)));
     };
 })();
 var texts = Data_Functor.map(Data_Functor.functorArray)(Halogen_HTML_Core.text);
+var showStrictField = function (v) {
+    return v.name + (" :: !" + v.typ);
+};
 var showField = function (v) {
     return v.name + (" :: " + v.typ);
 };
 var separate = function (sep) {
-    return function ($93) {
-        return Halogen_HTML_Elements.span_(Data_Foldable.intercalate(Data_Foldable.foldableArray)(Data_Monoid.monoidArray)([ sep ])(Data_Functor.map(Data_Functor.functorArray)(Data_Array.singleton)($93)));
+    return function ($112) {
+        return Halogen_HTML_Elements.span_(Data_Foldable.intercalate(Data_Foldable.foldableArray)(Data_Monoid.monoidArray)([ sep ])(Data_Functor.map(Data_Functor.functorArray)(Data_Array.singleton)($112)));
     };
 };
 var nonEmptyFields = Data_Array.filter(function (v) {
     return v.name !== "" && v.typ !== "";
 });
-var nameL = function (dictStrong) {
-    return Data_Lens_Lens.lens(function (v) {
-        return v.name;
-    })(function (s) {
-        return function (n) {
-            var $54 = {};
-            for (var $55 in s) {
-                if ({}.hasOwnProperty.call(s, $55)) {
-                    $54[$55] = s[$55];
-                };
-            };
-            $54.name = n;
-            return $54;
-        };
-    })(dictStrong);
+var from = function ($113) {
+    return Halogen_HTML_Elements.span_(texts($113));
 };
-var lensDefault = function (b) {
-    return function (l) {
-        return function (dictStrong) {
-            return Data_Lens_Lens.withLens(l)(function (getter) {
-                return function (setter) {
-                    return Data_Lens_Lens.lens(function ($94) {
-                        return Data_Maybe.fromMaybe(b)(getter($94));
-                    })(function (a) {
-                        return function ($95) {
-                            return setter(a)(Data_Maybe.Just.create($95));
-                        };
-                    })(dictStrong);
-                };
-            });
+var defn = function (v) {
+    return function (args) {
+        return function (body) {
+            return Data_Functor.map(Data_Functor.functorArray)(function ($114) {
+                return Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text($114)));
+            })([ v.name + (" :: " + v.typ), v.name + (" " + (Data_String.joinWith(" ")(args) + (" = " + body))) ]);
         };
     };
-};
-var hasSourceAnnL = function (dictStrong) {
-    return Data_Lens_Lens.lens(function (v) {
-        return v.hasSourceAnn;
-    })(function (s) {
-        return function (i) {
-            var $57 = {};
-            for (var $58 in s) {
-                if ({}.hasOwnProperty.call(s, $58)) {
-                    $57[$58] = s[$58];
-                };
-            };
-            $57.hasSourceAnn = i;
-            return $57;
-        };
-    })(dictStrong);
-};
-var hasSourceAnnComponent = Halogen_HTML_Lens_Checkbox.renderAsField("Contains a source annotation")(function (dictStrong) {
-    return hasSourceAnnL(dictStrong);
-});
-var from = function ($96) {
-    return Halogen_HTML_Elements.span_(texts($96));
-};
-var fieldsL = function (dictStrong) {
-    return Data_Lens_Lens.lens(function (v) {
-        return v.fields;
-    })(function (v) {
-        return function (v1) {
-            var $60 = {};
-            for (var $61 in v) {
-                if ({}.hasOwnProperty.call(v, $61)) {
-                    $60[$61] = v[$61];
-                };
-            };
-            $60.fields = v1;
-            return $60;
-        };
-    })(dictStrong);
-};
-var renderField = function (i) {
-    return function (state) {
-        return function (alens) {
-            var thislens = function (dictStrong) {
-                return Data_Lens_Lens.withLens(alens)(function (a) {
-                    return function (b) {
-                        return Data_Lens_Lens.lens(a)(b)(dictStrong);
-                    };
-                });
-            };
-            var _typ = function (dictStrong) {
-                return function ($97) {
-                    return thislens(dictStrong)(Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
-                        return "typ";
-                    }))()()(Data_Symbol.SProxy.value)(dictStrong)($97));
-                };
-            };
-            var _name = function (dictStrong) {
-                return function ($98) {
-                    return thislens(dictStrong)(Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
-                        return "name";
-                    }))()()(Data_Symbol.SProxy.value)(dictStrong)($98));
-                };
-            };
-            return [ Halogen_HTML_Lens_Input.render(function (dictStrong) {
-                return _name(dictStrong);
-            })(state), Halogen_HTML_Core.text(" :: "), Halogen_HTML_Lens_Input.render(function (dictStrong) {
-                return _typ(dictStrong);
-            })(state), Halogen_HTML_Core.text(" "), Halogen_HTML_Lens_Button.renderAsField("\u2212")(Data_Lens_Setter.over(fieldsL(Data_Profunctor_Strong.strongFn))(tryDeleteAt(i)))(false) ];
-        };
-    };
-};
-var fieldPrefixL = function (dictStrong) {
-    return Data_Lens_Lens.lens(function (v) {
-        return v.fieldPrefix;
-    })(function (s) {
-        return function (e) {
-            var $63 = {};
-            for (var $64 in s) {
-                if ({}.hasOwnProperty.call(s, $64)) {
-                    $63[$64] = s[$64];
-                };
-            };
-            $63.fieldPrefix = e;
-            return $63;
-        };
-    })(dictStrong);
-};
-var fieldPrefixComponent = Halogen_HTML_Lens_Input.renderAsField("Prefix for the fields")(function (dictStrong) {
-    return fieldPrefixL(dictStrong);
-});
-var descriptionL = function (dictStrong) {
-    return Data_Lens_Lens.lens(function (v) {
-        return v.description;
-    })(function (s) {
-        return function (d) {
-            var $66 = {};
-            for (var $67 in s) {
-                if ({}.hasOwnProperty.call(s, $67)) {
-                    $66[$67] = s[$67];
-                };
-            };
-            $66.description = d;
-            return $66;
-        };
-    })(dictStrong);
 };
 var commentline = function (text) {
     return from([ "-- ", text, "\x0a" ]);
 };
 var generateSource = function (v) {
+    var tyname = v.name + "Data";
     var record = function (v1) {
-        if (v1.length === 0) {
-            return [ "  {}" ];
-        };
-        if (v1.length === 1) {
-            return [ "  { " + (v.fieldPrefix + (showField(v1[0]) + " }")) ];
-        };
-        return (function (v2) {
-            return Data_Semigroup.append(Data_Semigroup.semigroupArray)(v2)(Control_Applicative.pure(Control_Applicative.applicativeArray)("  }"));
-        })(Data_Array.mapWithIndex(function (i) {
-            return function (f) {
-                return (function () {
-                    var $72 = i === 0;
-                    if ($72) {
-                        return "  { ";
-                    };
-                    return "  , ";
-                })() + (v.fieldPrefix + showField(f));
+        return function (s) {
+            if (v1.length === 0) {
+                return [ "  {}" + s ];
             };
-        })(v1));
+            if (v1.length === 1) {
+                return [ "  { " + (v.fieldPrefix + (showField(v1[0]) + (" }" + s))) ];
+            };
+            return (function (v2) {
+                return Data_Semigroup.append(Data_Semigroup.semigroupArray)(v2)(Control_Applicative.pure(Control_Applicative.applicativeArray)("  }" + s));
+            })(Data_Array.mapWithIndex(function (i) {
+                return function (f) {
+                    return (function () {
+                        var $72 = i === 0;
+                        if ($72) {
+                            return "  { ";
+                        };
+                        return "  , ";
+                    })() + (v.fieldPrefix + showStrictField(f));
+                };
+            })(v1));
+        };
     };
+    var realFields = nonEmptyFields(v.fields);
+    var unwrapper = (function () {
+        var mkTuple = function (f) {
+            return "(" + (Data_String.joinWith(", ")(Data_Functor.map(Data_Functor.functorArray)(f)(realFields)) + ")");
+        };
+        var $73 = Data_Array["null"](realFields);
+        if ($73) {
+            return [  ];
+        };
+        return Data_Array.cons(Halogen_HTML_Elements.br_)(defn({
+            name: "unwrap" + v.name,
+            typ: tyname + (" -> " + mkTuple(function (v1) {
+                return v1.typ;
+            }))
+        })([ v.fieldPrefix ])(mkTuple(function (v1) {
+            return v.fieldPrefix + (v1.name + (" " + v.fieldPrefix));
+        })));
+    })();
+    var clsSourceAnn = (function () {
+        if (v.hasSourceAnn) {
+            return [ Halogen_HTML_Elements.br_, Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text("instance HasSourceAnn " + (tyname + " where")))), Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text("  getSourceAnn = " + (v.fieldPrefix + "SourceAnn")))) ];
+        };
+        return [  ];
+    })();
     var allFields = Data_Semigroup.append(Data_Semigroup.semigroupArray)((function () {
         if (v.hasSourceAnn) {
             return [ {
@@ -294,18 +199,18 @@ var generateSource = function (v) {
             } ];
         };
         return [  ];
-    })())(nonEmptyFields(v.fields));
-    return Halogen_HTML_Elements.pre_([ commentline(v.description), Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(from([ "data ", v.name, " = ", v.name ]))), Halogen_HTML_Elements.div_(Data_Functor.map(Data_Functor.functorArray)(function ($99) {
-        return Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text($99)));
-    })(record(allFields))) ]);
+    })())(realFields);
+    return Halogen_HTML_Elements.pre_(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ commentline(v.description), Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(from([ "data ", tyname, " = ", tyname ]))), Halogen_HTML_Elements.div_(Data_Functor.map(Data_Functor.functorArray)(function ($115) {
+        return Halogen_HTML_Elements.div_(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text($115)));
+    })(record(allFields)(" deriving (Show, Eq)"))) ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)(clsSourceAnn)(unwrapper)));
 };
 var ccwords = (function () {
     var re = Data_String_Regex_Unsafe.unsafeRegex("([A-Z][a-z]+|[A-Z]+(?=[A-Z][a-z]))")(Data_String_Regex_Flags.unicode);
-    return function ($100) {
-        return Data_Array.filter(Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraBoolean)))(Data_Eq.eq(Data_Eq.eqString))(""))(Data_String_Regex.split(re)($100));
+    return function ($116) {
+        return Data_Array.filter(Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraFunction(Data_HeytingAlgebra.heytingAlgebraBoolean)))(Data_Eq.eq(Data_Eq.eqString))(""))(Data_String_Regex.split(re)($116));
     };
 })();
-var toPrefix = function ($101) {
+var toPrefix = function ($117) {
     return Data_Foldable.fold(Data_Foldable.foldableArray)(Data_Monoid.monoidString)(Data_Functor.map(Data_Functor.functorArray)(function (v) {
         if (v === "Type") {
             return "ty";
@@ -313,47 +218,171 @@ var toPrefix = function ($101) {
         if (v === "Declaration") {
             return "decl";
         };
+        if (v === "Data") {
+            return "";
+        };
         return Data_String.toLower(Data_String_CodePoints.take(1)(v));
-    })(ccwords($101)));
+    })(ccwords($117)));
 };
-var suggestFieldPrefixL = function (dictStrong) {
-    return Data_Lens_Suggestion.suggest(Data_Eq.eqString)(function (dictStrong1) {
-        return nameL(dictStrong1);
-    })(toPrefix)(function (dictStrong1) {
-        return fieldPrefixL(dictStrong1);
-    })(dictStrong);
-};
-var nameComponent = Halogen_HTML_Lens_Input.renderAsField("Name")(function (dictStrong) {
-    return suggestFieldPrefixL(dictStrong);
-});
-var suggestDescriptionL = function (dictStrong) {
-    return Data_Lens_Suggestion.suggest(Data_Eq.eqString)(function (dictStrong1) {
-        return descriptionL(dictStrong1);
-    })(toName)(function (dictStrong1) {
-        return suggestFieldPrefixL(dictStrong1);
-    })(dictStrong);
-};
-var descriptionComponent = Halogen_HTML_Lens_Input.renderAsField("Description")(function (dictStrong) {
-    return suggestDescriptionL(dictStrong);
-});
 var addField = function (s) {
-    var $80 = {};
-    for (var $81 in s) {
-        if ({}.hasOwnProperty.call(s, $81)) {
-            $80[$81] = s[$81];
+    var $84 = {};
+    for (var $85 in s) {
+        if ({}.hasOwnProperty.call(s, $85)) {
+            $84[$85] = s[$85];
         };
     };
-    $80.fields = Data_Semigroup.append(Data_Semigroup.semigroupArray)(nonEmptyFields(s.fields))([ {
+    $84.fields = Data_Semigroup.append(Data_Semigroup.semigroupArray)(nonEmptyFields(s.fields))([ {
         name: "",
         typ: ""
     } ]);
-    return $80;
+    return $84;
 };
+var _name = function (dictStrong) {
+    return Data_Lens_Lens.lens(function (v) {
+        return v.name;
+    })(function (s) {
+        return function (n) {
+            var $87 = {};
+            for (var $88 in s) {
+                if ({}.hasOwnProperty.call(s, $88)) {
+                    $87[$88] = s[$88];
+                };
+            };
+            $87.name = n;
+            return $87;
+        };
+    })(dictStrong);
+};
+var _hasSourceAnn = function (dictStrong) {
+    return Data_Lens_Lens.lens(function (v) {
+        return v.hasSourceAnn;
+    })(function (s) {
+        return function (i) {
+            var $90 = {};
+            for (var $91 in s) {
+                if ({}.hasOwnProperty.call(s, $91)) {
+                    $90[$91] = s[$91];
+                };
+            };
+            $90.hasSourceAnn = i;
+            return $90;
+        };
+    })(dictStrong);
+};
+var hasSourceAnnComponent = Halogen_HTML_Lens_Checkbox.renderAsField("Contains a source annotation")(function (dictStrong) {
+    return _hasSourceAnn(dictStrong);
+});
+var _fields = function (dictStrong) {
+    return Data_Lens_Lens.lens(function (v) {
+        return v.fields;
+    })(function (v) {
+        return function (v1) {
+            var $93 = {};
+            for (var $94 in v) {
+                if ({}.hasOwnProperty.call(v, $94)) {
+                    $93[$94] = v[$94];
+                };
+            };
+            $93.fields = v1;
+            return $93;
+        };
+    })(dictStrong);
+};
+var renderField = function (i) {
+    return function (state) {
+        return function (alens) {
+            var thislens = function (dictStrong) {
+                return Data_Lens_Lens.cloneLens(alens)(dictStrong);
+            };
+            var _typ = function (dictStrong) {
+                return function ($118) {
+                    return thislens(dictStrong)(Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
+                        return "typ";
+                    }))()()(Data_Symbol.SProxy.value)(dictStrong)($118));
+                };
+            };
+            var _name1 = function (dictStrong) {
+                return function ($119) {
+                    return thislens(dictStrong)(Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
+                        return "name";
+                    }))()()(Data_Symbol.SProxy.value)(dictStrong)($119));
+                };
+            };
+            var _suggestTyp = function (dictStrong) {
+                return Data_Lens_Suggestion.suggest(Data_Eq.eqString)(function (dictStrong1) {
+                    return _name1(dictStrong1);
+                })(Control_Category.id(Control_Category.categoryFn))(function (dictStrong1) {
+                    return _typ(dictStrong1);
+                })(dictStrong);
+            };
+            return [ Halogen_HTML_Lens_Button.renderAsField("\u2212")(Data_Lens_Setter.over(_fields(Data_Profunctor_Strong.strongFn))(tryDeleteAt(i)))(false), Halogen_HTML_Core.text(" "), Halogen_HTML_Lens_Input.render(function (dictStrong) {
+                return _suggestTyp(dictStrong);
+            })(state), Halogen_HTML_Core.text(" :: "), Halogen_HTML_Lens_Input.render(function (dictStrong) {
+                return _typ(dictStrong);
+            })(state) ];
+        };
+    };
+};
+var _fieldPrefix = function (dictStrong) {
+    return Data_Lens_Lens.lens(function (v) {
+        return v.fieldPrefix;
+    })(function (s) {
+        return function (e) {
+            var $96 = {};
+            for (var $97 in s) {
+                if ({}.hasOwnProperty.call(s, $97)) {
+                    $96[$97] = s[$97];
+                };
+            };
+            $96.fieldPrefix = e;
+            return $96;
+        };
+    })(dictStrong);
+};
+var _suggestFieldPrefix = function (dictStrong) {
+    return Data_Lens_Suggestion.suggest(Data_Eq.eqString)(function (dictStrong1) {
+        return _name(dictStrong1);
+    })(toPrefix)(function (dictStrong1) {
+        return _fieldPrefix(dictStrong1);
+    })(dictStrong);
+};
+var nameComponent = Halogen_HTML_Lens_Input.renderAsField("Name")(function (dictStrong) {
+    return _suggestFieldPrefix(dictStrong);
+});
+var fieldPrefixComponent = Halogen_HTML_Lens_Input.renderAsField("Prefix for the fields")(function (dictStrong) {
+    return _fieldPrefix(dictStrong);
+});
+var _description = function (dictStrong) {
+    return Data_Lens_Lens.lens(function (v) {
+        return v.description;
+    })(function (s) {
+        return function (d) {
+            var $99 = {};
+            for (var $100 in s) {
+                if ({}.hasOwnProperty.call(s, $100)) {
+                    $99[$100] = s[$100];
+                };
+            };
+            $99.description = d;
+            return $99;
+        };
+    })(dictStrong);
+};
+var _suggestDescription = function (dictStrong) {
+    return Data_Lens_Suggestion.suggest(Data_Eq.eqString)(function (dictStrong1) {
+        return _description(dictStrong1);
+    })(toName)(function (dictStrong1) {
+        return _suggestFieldPrefix(dictStrong1);
+    })(dictStrong);
+};
+var descriptionComponent = Halogen_HTML_Lens_Input.renderAsField("Description")(function (dictStrong) {
+    return _suggestDescription(dictStrong);
+});
 var component = (function () {
     var render = function (v) {
-        return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.h1_([ Halogen_HTML_Core.text("Create PureScript Compiler Data Type") ]), descriptionComponent(v), nameComponent(v), fieldPrefixComponent(v), hasSourceAnnComponent(v), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Fields") ]), Halogen_HTML_Elements.div_([ Halogen_HTML_Lens_Button.renderAsField("Add field")(addField)(false) ]), Halogen_HTML_Elements.ol_(Data_Functor.map(Data_Functor.functorArray)(Halogen_HTML_Elements.li_)(withLenses(renderField)(function (dictStrong) {
-            return fieldsL(dictStrong);
-        })(v))), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Generated code") ]), generateSource(v) ]);
+        return Halogen_HTML_Elements.div_([ Halogen_HTML_Elements.h1_([ Halogen_HTML_Core.text("Create PureScript Compiler Data Type") ]), descriptionComponent(v), nameComponent(v), fieldPrefixComponent(v), hasSourceAnnComponent(v), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Fields") ]), Halogen_HTML_Elements.ol_(Data_Functor.map(Data_Functor.functorArray)(Halogen_HTML_Elements.li_)(withLenses(renderField)(function (dictStrong) {
+            return _fields(dictStrong);
+        })(v))), Halogen_HTML_Elements.div_([ Halogen_HTML_Lens_Button.renderAsField("Add field")(addField)(false) ]), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Generated code") ]), generateSource(v) ]);
     };
     var initialState = {
         description: "A type declaration",
@@ -371,37 +400,38 @@ var component = (function () {
     });
 })();
 module.exports = {
-    descriptionL: descriptionL,
-    nameL: nameL,
-    fieldPrefixL: fieldPrefixL,
-    hasSourceAnnL: hasSourceAnnL,
-    fieldsL: fieldsL,
+    _description: _description,
+    _name: _name,
+    _fieldPrefix: _fieldPrefix,
+    _hasSourceAnn: _hasSourceAnn,
+    _fields: _fields,
     ccwords: ccwords,
     toName: toName,
     toPrefix: toPrefix,
-    suggestDescriptionL: suggestDescriptionL,
-    suggestFieldPrefixL: suggestFieldPrefixL,
+    _suggestDescription: _suggestDescription,
+    _suggestFieldPrefix: _suggestFieldPrefix,
     descriptionComponent: descriptionComponent,
     nameComponent: nameComponent,
     fieldPrefixComponent: fieldPrefixComponent,
     hasSourceAnnComponent: hasSourceAnnComponent,
     addField: addField,
     component: component,
-    lensDefault: lensDefault,
     traversalDefault: traversalDefault,
     withLenses: withLenses,
     tryDeleteAt: tryDeleteAt,
     renderField: renderField,
     showField: showField,
+    showStrictField: showStrictField,
     nonEmptyFields: nonEmptyFields,
     texts: texts,
     from: from,
     commentline: commentline,
     separate: separate,
+    defn: defn,
     generateSource: generateSource
 };
 
-},{"../Control.Applicative":5,"../Control.Monad.Aff":23,"../Control.Semigroupoid":65,"../DOM":113,"../Data.Array":118,"../Data.Char":136,"../Data.Char.Unicode":134,"../Data.Eq":152,"../Data.Foldable":158,"../Data.Function":165,"../Data.Functor":173,"../Data.HeytingAlgebra":177,"../Data.Lens":217,"../Data.Lens.Fold":188,"../Data.Lens.Getter":189,"../Data.Lens.Index":191,"../Data.Lens.Internal.Forget":194,"../Data.Lens.Internal.Shop":199,"../Data.Lens.Internal.Wander":201,"../Data.Lens.Lens":207,"../Data.Lens.Record":212,"../Data.Lens.Setter":213,"../Data.Lens.Suggestion":214,"../Data.Maybe":224,"../Data.Maybe.First":222,"../Data.Monoid":232,"../Data.Profunctor.Strong":249,"../Data.Semigroup":254,"../Data.String":275,"../Data.String.CodePoints":265,"../Data.String.Regex":269,"../Data.String.Regex.Flags":266,"../Data.String.Regex.Unsafe":267,"../Data.String.Utils":273,"../Data.Symbol":276,"../Halogen":322,"../Halogen.Component":297,"../Halogen.HTML":308,"../Halogen.HTML.Core":300,"../Halogen.HTML.Elements":301,"../Halogen.HTML.Lens":306,"../Halogen.HTML.Lens.Button":303,"../Halogen.HTML.Lens.Checkbox":304,"../Halogen.HTML.Lens.Input":305,"../Halogen.HTML.Properties":307,"../Halogen.Query.HalogenM":311,"../Prelude":330}],2:[function(require,module,exports){
+},{"../Control.Applicative":5,"../Control.Category":12,"../Control.Monad.Aff":23,"../Control.Semigroupoid":65,"../DOM":113,"../Data.Array":118,"../Data.Char":136,"../Data.Char.Unicode":134,"../Data.Eq":152,"../Data.Foldable":158,"../Data.Function":165,"../Data.Functor":173,"../Data.HeytingAlgebra":177,"../Data.Lens":217,"../Data.Lens.Fold":188,"../Data.Lens.Getter":189,"../Data.Lens.Index":191,"../Data.Lens.Internal.Forget":194,"../Data.Lens.Internal.Shop":199,"../Data.Lens.Internal.Wander":201,"../Data.Lens.Lens":207,"../Data.Lens.Record":212,"../Data.Lens.Setter":213,"../Data.Lens.Suggestion":214,"../Data.Maybe":224,"../Data.Maybe.First":222,"../Data.Monoid":232,"../Data.Profunctor.Strong":249,"../Data.Semigroup":254,"../Data.String":275,"../Data.String.CodePoints":265,"../Data.String.Regex":269,"../Data.String.Regex.Flags":266,"../Data.String.Regex.Unsafe":267,"../Data.String.Utils":273,"../Data.Symbol":276,"../Halogen":322,"../Halogen.Component":297,"../Halogen.HTML":308,"../Halogen.HTML.Core":300,"../Halogen.HTML.Elements":301,"../Halogen.HTML.Lens":306,"../Halogen.HTML.Lens.Button":303,"../Halogen.HTML.Lens.Checkbox":304,"../Halogen.HTML.Lens.Input":305,"../Halogen.HTML.Properties":307,"../Halogen.Query.HalogenM":311,"../Prelude":330}],2:[function(require,module,exports){
 // Generated by purs version 0.11.6
 "use strict";
 var Data_Functor = require("../Data.Functor");

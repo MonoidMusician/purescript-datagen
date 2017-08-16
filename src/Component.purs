@@ -9,7 +9,7 @@ import Data.Array as Array
 import Data.Char (fromCharCode, toUpper)
 import Data.Char.Unicode (isAlphaNum, isSpace)
 import Data.Foldable (fold)
-import Data.Lens (ALens', Traversal', preview, withLens, (%~), (.~), (^.))
+import Data.Lens (ALens', Traversal', cloneLens, (%~), (.~), (^.), (^?))
 import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
 import Data.Lens.Suggestion (Lens', lens, suggest)
@@ -83,6 +83,7 @@ toPrefix :: String -> String
 toPrefix = fold <<< ccwords >>> map case _ of
   "Type" -> "ty"
   "Declaration" -> "decl"
+  "Data" -> ""
   s -> Str.toLower (Str.take 1 s)
 
 _suggestDescription :: Lens' State String
@@ -135,8 +136,8 @@ component =
       , fieldPrefixComponent state
       , hasSourceAnnComponent state
       , HH.h2_ [ HH.text "Fields" ]
-      , HH.div_ [ HL.Button.renderAsField "Add field" addField false ]
       , HH.ol_ $ HH.li_ <$> withLenses renderField _fields state
+      , HH.div_ [ HL.Button.renderAsField "Add field" addField false ]
       , HH.h2_ [ HH.text "Generated code" ]
       , generateSource state
       ]
@@ -144,13 +145,9 @@ component =
   eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
   eval = HL.eval
 
-lensDefault :: forall a b. b -> ALens' a (Maybe b) -> Lens' a b
-lensDefault b l = withLens l \getter setter ->
-  lens (getter >>> fromMaybe b) (\a -> Just >>> setter a)
-
 traversalDefault :: forall a b. b -> Traversal' a b -> Lens' a b
 traversalDefault b l = lens
-  (\v -> fromMaybe b (preview l v))
+  (\v -> fromMaybe b (v ^? l))
   (\v b' -> (l .~ b') v)
 
 withLenses :: forall a b r. (Int -> a -> ALens' a b -> r) -> Lens' a (Array b) -> a -> Array r
@@ -163,22 +160,27 @@ tryDeleteAt i a = Array.deleteAt i a # fromMaybe a
 
 renderField :: forall p. Int -> State -> ALens' State Annotation -> Array (Element p)
 renderField i state alens =
-  [ HL.Input.render _name state
+  [ HL.Button.renderAsField "\x2212" (_fields %~ tryDeleteAt i) false
+  , HH.text " "
+  , HL.Input.render _suggestTyp state
   , HH.text " :: "
   , HL.Input.render _typ state
-  , HH.text " "
-  , HL.Button.renderAsField "\x2212" (_fields %~ tryDeleteAt i) false
   ]
   where
     thislens :: Lens' State Annotation
-    thislens = withLens alens \a b -> lens a b
+    thislens = cloneLens alens
     _name :: Lens' State String
     _name = thislens <<< prop (SProxy :: SProxy "name")
     _typ :: Lens' State String
     _typ = thislens <<< prop (SProxy :: SProxy "typ")
+    _suggestTyp :: Lens' State String
+    _suggestTyp = suggest _name id _typ
 
 showField :: Annotation -> String
 showField { name, typ } = name <> " :: " <> typ
+
+showStrictField :: Annotation -> String
+showStrictField { name, typ } = name <> " :: !" <> typ
 
 nonEmptyFields :: Array Annotation -> Array Annotation
 nonEmptyFields = filter \{ name, typ } ->
@@ -196,17 +198,38 @@ commentline text = from [ "-- ", text, "\n" ]
 separate :: forall p i. HH.HTML p i -> Array (HH.HTML p i) -> HH.HTML p i
 separate sep = HH.span_ <<< intercalate [sep] <<< map Array.singleton
 
+defn :: forall p. Annotation -> Array String -> String -> Array (Element p)
+defn { name, typ } args body = HH.div_ <<< pure <<< HH.text <$>
+  [ name <> " :: " <> typ
+  , name <> " " <> joinWith " " args <> " = " <> body
+  ]
+
 generateSource :: forall p. State -> Element p
 generateSource state@{ description, name, fieldPrefix, hasSourceAnn, fields } = HH.pre_ $
     [ commentline description
-    , HH.div_ $ pure $ from ["data ", name, " = ", name]
-    , HH.div_ $ HH.div_ <<< pure <<< HH.text <$> record allFields
-    ]
+    , HH.div_ $ pure $ from ["data ", tyname, " = ", tyname]
+    , HH.div_ $ HH.div_ <<< pure <<< HH.text <$>
+        record allFields " deriving (Show, Eq)"
+    ] <> clsSourceAnn <> unwrapper
     where
+    tyname = name <> "Data"
+    realFields = nonEmptyFields fields
     allFields = (if hasSourceAnn then
       [ { name: "SourceAnn", typ: "SourceAnn" }
-      ] else []) <> nonEmptyFields fields
-    record [] = ["  {}"]
-    record [f] = ["  { " <> fieldPrefix <> showField f <> " }"]
-    record fs = (_ <> pure "  }") $ fs # mapWithIndex \i f ->
-      (if i == 0 then "  { " else "  , ") <> fieldPrefix <> showField f
+      ] else []) <> realFields
+    record [] s = ["  {}" <> s]
+    record [f] s = ["  { " <> fieldPrefix <> showField f <> " }" <> s]
+    record fs s = (_ <> pure ("  }" <> s)) $ fs # mapWithIndex \i f ->
+      (if i == 0 then "  { " else "  , ") <> fieldPrefix <> showStrictField f
+    clsSourceAnn = if hasSourceAnn then
+      [ HH.br_
+      , HH.div_ $ pure $ HH.text $ "instance HasSourceAnn " <> tyname <> " where"
+      , HH.div_ $ pure $ HH.text $ "  getSourceAnn = " <> fieldPrefix <> "SourceAnn"
+      ] else []
+    unwrapper =
+      let mkTuple f = "(" <> joinWith ", " (f <$> realFields) <> ")" in
+      if Array.null realFields then []
+      else Array.cons HH.br_ $ defn
+        { name: "unwrap" <> name
+        , typ: tyname <> " -> " <> mkTuple _.typ
+        } [fieldPrefix] $ mkTuple \{ name } -> (fieldPrefix <> name <> " " <> fieldPrefix)
