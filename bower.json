@@ -15,6 +15,8 @@
     "purescript-strings": "^3.3.1",
     "purescript-unicode": "^3.0.1",
     "purescript-verbal-expressions": "^3.0.0",
-    "purescript-matryoshka": "^0.3.0"
+    "purescript-matryoshka": "^0.3.0",
+    "purescript-variant": "^3.2.1",
+    "purescript-pairs": "^5.0.0"
   }
 }

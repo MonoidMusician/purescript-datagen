@@ -5,18 +5,26 @@ import Prelude
 import Control.Apply (lift2)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
+import Data.Const (Const(..))
 import Data.Either (Either)
 import Data.Functor.Mu (Mu, roll, unroll)
+import Data.Functor.Product (Product(..))
+import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
+import Data.Functor.Variant as VF
+import Data.HeytingAlgebra (ff, tt)
 import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (class Monoid, mempty)
+import Data.Newtype (unwrap)
 import Data.NonEmpty (NonEmpty, (:|))
+import Data.Pair (Pair(..))
 import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable) as StrMap
 import Data.String (joinWith)
+import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..))
 import Matryoshka (Algebra, GAlgebra, cata, para)
 
@@ -35,46 +43,69 @@ importAllFrom = Tuple <@> importAll
 importFrom :: Imports -> Module -> Tuple Module ImportModule
 importFrom is = Tuple <@> ImportModule (pure is) mempty
 
-aType :: ATypeF AType -> AType
+aType :: ATypeVF ATypeV -> ATypeV
 aType = roll
 
-aTypeApp :: AType -> AType -> AType
-aTypeApp = map aType <<< TypeApp
+aTypeConst ::
+  forall sym a bleh.
+    IsSymbol sym =>
+    RowCons sym (FProxy (Const a)) bleh ATypeVR =>
+  SProxy sym -> a -> ATypeV
+aTypeConst k a = aType $ VF.inj k $ Const a
 
-aTypeFunction :: AType -> AType -> AType
-aTypeFunction = map aType <<< TypeFunction
+aTypePair ::
+  forall sym bleh.
+    IsSymbol sym =>
+    RowCons sym (FProxy Pair) bleh ATypeVR =>
+  SProxy sym -> ATypeV -> ATypeV -> ATypeV
+aTypePair k a b  = aType $ VF.inj k $ Pair a b
 
-aTypeName :: Qualified Proper -> AType
-aTypeName = aType <<< TypeName
+aTypeProduct ::
+  forall sym f g bleh.
+    IsSymbol sym =>
+    Functor f =>
+    Functor g =>
+    RowCons sym (FProxy (Product f g)) bleh ATypeVR =>
+  SProxy sym -> f ATypeV -> g ATypeV -> ATypeV
+aTypeProduct k a b = aType $ VF.inj k $ Product $ Tuple a b
 
-aTypeVar :: Ident -> AType
-aTypeVar = aType <<< TypeVar
+aTypeApp :: ATypeV -> ATypeV -> ATypeV
+aTypeApp = aTypePair (SProxy :: SProxy "app")
+
+aTypeFunction :: ATypeV -> ATypeV -> ATypeV
+aTypeFunction = aTypePair (SProxy :: SProxy "function")
+
+aTypeName :: Qualified Proper -> ATypeV
+aTypeName = aTypeConst (SProxy :: SProxy "name")
+
+aTypeVar :: Ident -> ATypeV
+aTypeVar = aTypeConst (SProxy :: SProxy "var")
 
 typeAbsType :: Ident -> TypeAbs
 typeAbsType = TypeAbs <@> Nothing
 
-newType :: Proper -> AType -> DataTypeDef
+newType :: Proper -> ATypeV -> DataTypeDef
 newType name typ = DataTypeDef mempty $ SumType $ Map.singleton name $ pure typ
 
-namedNewType :: Proper -> AType -> Tuple Proper DataTypeDef
+namedNewType :: Proper -> ATypeV -> Tuple Proper DataTypeDef
 namedNewType = lift2 compose Tuple newType
 
 alias :: Proper -> NonEmpty Array (Qualified Proper) -> Tuple Proper DataTypeDef
 alias name as = Tuple name $ DataTypeDef mempty $ TypeAlias (chainl aTypeApp as)
 
-chainl :: (AType -> AType -> AType) -> NonEmpty Array (Qualified Proper) -> AType
+chainl :: (ATypeV -> ATypeV -> ATypeV) -> NonEmpty Array (Qualified Proper) -> ATypeV
 chainl app (fn :| args) = go (aTypeName fn) args
   where
-    go :: AType -> Array (Qualified Proper) -> AType
+    go :: ATypeV -> Array (Qualified Proper) -> ATypeV
     go f as = case uncons as of
       Nothing -> f
       Just { head, tail } ->
         go (app f (aTypeName head)) tail
 
-chainr :: (AType -> AType -> AType) -> NonEmpty Array (Qualified Proper) -> AType
+chainr :: (ATypeV -> ATypeV -> ATypeV) -> NonEmpty Array (Qualified Proper) -> ATypeV
 chainr app (fn :| args) = go (aTypeName fn) args
   where
-    go :: AType -> Array (Qualified Proper) -> AType
+    go :: ATypeV -> Array (Qualified Proper) -> ATypeV
     go f as = case unsnoc as of
       Nothing -> f
       Just { init, last } ->
@@ -244,8 +275,8 @@ wrapIfl :: forall a. (a -> Boolean) -> (a -> String) -> (a -> String)
 wrapIfl = lift2 wrapIf
 
 data DataType
-  = TypeAlias AType
-  | SumType (Map Proper (Array AType))
+  = TypeAlias ATypeV
+  | SumType (Map Proper (Array ATypeV))
 instance showDataType :: Show DataType where
   show (TypeAlias t) = showAType t
   show (SumType m) = joinWith " | " $ Map.toAscUnfoldable m <#> \(Tuple c ts) ->
@@ -268,45 +299,55 @@ declKeyword (SumType m)
     = TNewtype
   | otherwise
     = TData
-data ATypeF a
-  = TypeName (Qualified Proper)
-  | TypeVar Ident
-  | TypeFunction a a
-  | TypeApp a a
-  | TypeRow (StrMap a) (Maybe a)
-type AType = Mu ATypeF
-derive instance functorATypeF :: Functor ATypeF
-showAType :: AType -> String
+type ATypeVR =
+  ( name     :: FProxy (Const (Qualified Proper))
+  , var      :: FProxy (Const Ident)
+  , function :: FProxy Pair
+  , app      :: FProxy Pair
+  , row      :: FProxy (Product StrMap Maybe)
+  )
+type ATypeVF = VariantF ATypeVR
+type ATypeV = Mu ATypeVF
+showAType :: ATypeV -> String
 showAType one = para showInner one
   where
-    showInner :: GAlgebra (Tuple AType) ATypeF String
-    showInner (TypeName q) = show q
-    showInner (TypeVar v) = show v
-    showInner (TypeFunction (Tuple a l) (Tuple b r)) =
-      left <> " -> " <> right
-      where
-        left = wrapIf' l $ isTypeFunction a
-        right = r
-    showInner (TypeApp (Tuple f l) (Tuple a r)) =
-      left <> " " <> right
-      where
-        left = wrapIf' l (isTypeFunction f)
-        right = wrapIf' r (isTypeApp a || isTypeFunction a)
-    showInner (TypeRow m Nothing) =
-      "( " <> showFields m <> " )"
-    showInner (TypeRow m (Just (Tuple _ a))) =
-      "( " <> showFields m <> " | " <> a <> " )"
+    showInner :: GAlgebra (Tuple ATypeV) ATypeVF String
+    showInner =
+      VF.match
+        { name: unwrap >>> show
+        , var: unwrap >>> show
+        , function:
+            \(Pair (Tuple a l) (Tuple b r)) ->
+              let left = wrapIf' l $ isTypeFunction a
+              in left <> " -> " <> r
+        , app:
+            \(Pair (Tuple f l) (Tuple a r)) ->
+              let
+                left = wrapIf' l (isTypeFunction f)
+                right = wrapIf' r (isTypeApp a || isTypeFunction a)
+              in left <> " " <> right
+        , row:
+            case _ of
+              Product (Tuple m Nothing) ->
+                "( " <> showFields m <> " )"
+              Product (Tuple m (Just (Tuple _ a))) ->
+                "( " <> showFields m <> " | " <> a <> " )"
+        }
 
     showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
       k <> " :: " <> v
-isTypeFunction :: AType -> Boolean
-isTypeFunction = unroll >>> case _ of
-  TypeFunction _ _ -> true
-  _ -> false
-isTypeApp :: AType -> Boolean
-isTypeApp = unroll >>> case _ of
-  TypeApp _ _ -> true
-  _ -> false
+
+is ::
+  forall sym f bleh rows a.
+    IsSymbol sym =>
+    RowCons sym (FProxy f) bleh rows =>
+  SProxy sym -> VariantF rows a -> Boolean
+is k = VF.on k tt $ VF.default ff
+
+isTypeFunction :: ATypeV -> Boolean
+isTypeFunction = unroll >>> is (SProxy :: SProxy "function")
+isTypeApp :: ATypeV -> Boolean
+isTypeApp = unroll >>> is (SProxy :: SProxy "app")
 
 data AKindF a
   = KindName (Qualified Proper)
