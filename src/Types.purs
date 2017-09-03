@@ -6,7 +6,7 @@ import Control.Apply (lift2)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
 import Data.Either (Either)
-import Data.Functor.Mu (Mu(..))
+import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -18,7 +18,7 @@ import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable) as StrMap
 import Data.String (joinWith)
 import Data.Tuple (Tuple(..))
-import Matryoshka (Algebra, cata)
+import Matryoshka (Algebra, GAlgebra, cata, para)
 
 onlyType :: Proper -> Import
 onlyType = Type <@> mempty
@@ -36,7 +36,7 @@ importFrom :: Imports -> Module -> Tuple Module ImportModule
 importFrom is = Tuple <@> ImportModule (pure is) mempty
 
 aType :: ATypeF AType -> AType
-aType = AType <<< In <<< map (\(AType at) -> at)
+aType = roll
 
 aTypeApp :: AType -> AType -> AType
 aTypeApp = map aType <<< TypeApp
@@ -125,7 +125,7 @@ thisModule =
     , Tuple (Proper "Qualified") $ DataTypeDef [typeAbsType $ Ident "a"] $
         SumType $ Map.fromFoldable
         [ Tuple (Proper "Qualified")
-          [ aTypeName $ Unqualified $ Proper "Module"
+          [ atnunqp "Module"
           , aTypeVar $ Ident "a"
           ]
         , Tuple (Proper "Unqualified") $ pure $ aTypeVar $ Ident "a"
@@ -141,8 +141,7 @@ thisModule =
       ( Unqualified <<< Proper <$> "Map" :| ["Module", "ImportModule"] )
     , Tuple (Proper "ImportModule") $ DataTypeDef mempty $
         SumType $ Map.singleton (Proper "ImportModule") $
-        [ aTypeApp (aTypeName $ Unqualified $ Proper "Maybe") $
-            aTypeName $ Unqualified $ Proper "Imports"
+        [ aTypeApp (atnunqp "Maybe") $ atnunqp "Imports"
         , chainl aTypeApp (Unqualified <<< Proper <$> "Map" :| ["Module", "Imports"])
         ]
     , Tuple (Proper "FUNCTION") $ DataTypeDef mempty $
@@ -152,8 +151,7 @@ thisModule =
               `aTypeApp` (atnunqp "Meh" `aTypeFunction` atnunqp "Eh"))
     ]
   }
-  where
-    atnunqp = aTypeName <<< Unqualified <<< Proper
+  where atnunqp = aTypeName <<< Unqualified <<< Proper
 
 newtype Module = Module (NonEmpty Array Proper)
 derive newtype instance eqModule :: Eq Module
@@ -249,13 +247,13 @@ data DataType
   = TypeAlias AType
   | SumType (Map Proper (Array AType))
 instance showDataType :: Show DataType where
-  show (TypeAlias t) = show t
+  show (TypeAlias t) = showAType t
   show (SumType m) = joinWith " | " $ Map.toAscUnfoldable m <#> \(Tuple c ts) ->
     show c <> case ts of
       [] -> ""
       _ ->
         " " <> joinWith " "
-          (wrapIfl (isTypeFunction || isTypeApp) show <$> ts)
+          (wrapIfl (isTypeFunction || isTypeApp) showAType <$> ts)
 data DeclKeyword = TType | TNewtype | TData
 derive instance eqDeclKeyword :: Eq DeclKeyword
 derive instance ordDeclKeyword :: Ord DeclKeyword
@@ -276,37 +274,37 @@ data ATypeF a
   | TypeFunction a a
   | TypeApp a a
   | TypeRow (StrMap a) (Maybe a)
-newtype AType = AType (Mu ATypeF)
+type AType = Mu ATypeF
 derive instance functorATypeF :: Functor ATypeF
-instance showAType :: Show AType where
-  show (AType (In one)) = showInner (map AType one)
-    where
-      showInner :: ATypeF AType -> String
-      showInner (TypeName q) = show q
-      showInner (TypeVar v) = show v
-      showInner (TypeFunction a b) = left <> " -> " <> right
-        where
-          left = wrapIfl isTypeFunction show a
-          right = show b
-      showInner (TypeApp f a) = left <> " " <> right
-        where
-          left = wrapIfl isTypeFunction show f
-          right = wrapIfl (isTypeApp || isTypeFunction) show a
-      showInner (TypeRow m Nothing) =
-        "( " <> showFields m <> " )"
-      showInner (TypeRow m (Just a)) =
-        "( " <> showFields m <> " | " <> show a <> " )"
+showAType :: AType -> String
+showAType one = para showInner one
+  where
+    showInner :: GAlgebra (Tuple AType) ATypeF String
+    showInner (TypeName q) = show q
+    showInner (TypeVar v) = show v
+    showInner (TypeFunction (Tuple a l) (Tuple b r)) =
+      left <> " -> " <> right
+      where
+        left = wrapIf' l $ isTypeFunction a
+        right = r
+    showInner (TypeApp (Tuple f l) (Tuple a r)) =
+      left <> " " <> right
+      where
+        left = wrapIf' l (isTypeFunction f)
+        right = wrapIf' r (isTypeApp a || isTypeFunction a)
+    showInner (TypeRow m Nothing) =
+      "( " <> showFields m <> " )"
+    showInner (TypeRow m (Just (Tuple _ a))) =
+      "( " <> showFields m <> " | " <> a <> " )"
 
-      showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k v) ->
-        k <> " :: " <> show v
-unaType :: AType -> ATypeF AType
-unaType (AType (In f)) = map AType f
+    showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
+      k <> " :: " <> v
 isTypeFunction :: AType -> Boolean
-isTypeFunction = unaType >>> case _ of
+isTypeFunction = unroll >>> case _ of
   TypeFunction _ _ -> true
   _ -> false
 isTypeApp :: AType -> Boolean
-isTypeApp = unaType >>> case _ of
+isTypeApp = unroll >>> case _ of
   TypeApp _ _ -> true
   _ -> false
 
