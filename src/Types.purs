@@ -3,10 +3,14 @@ module Types where
 import Prelude
 
 import Control.Apply (lift2)
+import Control.Comonad.Cofree (Cofree, head, (:<))
+import Control.Monad.State (State, gets, modify, runState)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
+import Data.Bifunctor (lmap)
 import Data.Const (Const(..))
 import Data.Either (Either)
+import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
@@ -16,17 +20,19 @@ import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (class Monoid, mempty)
+import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (unwrap)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Pair (Pair(..))
 import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
-import Data.StrMap (toUnfoldable) as StrMap
-import Data.String (joinWith)
+import Data.StrMap (toUnfoldable, insert) as StrMap
+import Data.String (joinWith, length)
 import Data.Symbol (class IsSymbol)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), fst, uncurry)
 import Matryoshka (Algebra, GAlgebra, cata, para)
+import Unsafe.Coerce (unsafeCoerce)
 
 onlyType :: Proper -> Import
 onlyType = Type <@> mempty
@@ -181,8 +187,7 @@ thisModule =
             `aTypeFunction` ((atnunqp "Map" `aTypeApp` atnunqp "Module")
               `aTypeApp` (atnunqp "Meh" `aTypeFunction` atnunqp "Eh"))
     ]
-  }
-  where atnunqp = aTypeName <<< Unqualified <<< Proper
+  } where atnunqp = aTypeName <<< Unqualified <<< Proper
 
 newtype Module = Module (NonEmpty Array Proper)
 derive newtype instance eqModule :: Eq Module
@@ -308,6 +313,156 @@ type ATypeVR =
   )
 type ATypeVF = VariantF ATypeVR
 type ATypeV = Mu ATypeVF
+
+data DPair' a da = DPairL' da a | DPairR' a da
+data DStrMap' a da = DStrMap' String da (StrMap a)
+type DATypeVR' a da =
+  ( name     :: Unit
+  , var      :: Unit
+  , function :: DPair' a da
+  , app      :: DPair' a da
+  , row      :: Tuple (DStrMap' a da) da
+  )
+data DMu' f df = DIn' (df (Mu f) (DMu' f df)) (DMu' f df)
+
+foreign import data D :: Type -> Type
+toD :: forall f df. Diff f df => df -> D f
+toD = unsafeCoerce
+fromD :: forall f df. Diff f df => D f -> df
+fromD = unsafeCoerce
+foreign import data DF :: (Type -> Type) -> (Type -> Type)
+toDF :: forall f df x. Diff1 f df => df x -> DF f x
+toDF = unsafeCoerce
+fromDF :: forall f df x. Diff1 f df => DF f x -> df x
+fromDF = unsafeCoerce
+data Z x = Z (D x) x
+data ZF f x = ZF (DF f x) x
+class Diff a da | a -> da where
+  up :: Z a -> a
+class
+  ( Functor f
+  , Functor df
+  ) <= Diff1 (f :: Type -> Type) (df :: Type -> Type) | f -> df where
+    upF     :: forall x dx. Diff x dx => ZF f x  ->           f x
+    --aroundF :: forall x. ZF f x  ->  ZF f (ZF f x)
+    --downF   :: forall x.    f x  ->     f (ZF f x)
+{-
+instance diff1Pair :: Diff1 Pair DPair where
+  upF (ZF eh a) =
+    case fromDF eh of
+      DPairR l da   -> Pair l (up (Z ( da) a))
+      DPairL   da r -> Pair   (up (Z ( da) a)) r
+  --aroundF ()
+instance diff1StrMap :: Diff1 a da => Diff1 StrMap DStrMap where
+  upF (ZF eh x) = case fromDF eh of
+    DStrMap key dx rest ->
+      StrMap.insert key (upF (ZF (toDF dx) x)) rest
+-}
+instance diff1Const :: Diff1 (Const a) (Const Void) where
+  upF (ZF eh _) = absurd (unwrap (fromDF eh))
+{-
+instance diff1Compose ::
+  ( Diff1 f df
+  , Diff1 g fg
+  ) => Diff1 (Compose f g) (Product (Compose df g) dg) where
+    upF (ZF eh x) =
+      case fromDF eh of
+        (Product (Tuple (Compose dfg) dg)) -> Compose $
+          ?upF
+-}
+
+data DPair a = DPairL (D a) a | DPairR a (D a)
+instance functorDPair :: Functor D => Functor DPair where
+  map f (DPairL da a) = DPairL (map f da) (f a)
+  map f (DPairR a da) = DPairR (f a) (map f da)
+data DStrMap a = DStrMap String (D a) (StrMap a)
+data DMu f = DIn ((DF f) (Mu f)) (DMu f)
+type DATypeVR =
+  ( name     :: FProxy (Const Unit)
+  , var      :: FProxy (Const Unit)
+  , function :: FProxy (DPair)
+  , app      :: FProxy (DPair)
+  , row      :: FProxy (Product D DStrMap)
+  )
+
+joinPair :: String -> Pair String -> String
+joinPair m (Pair l r) = l <> m <> r
+
+simpleShow :: Algebra ATypeVF String
+simpleShow = VF.match
+  { name: unwrap >>> show
+  , var: unwrap >>> show
+  , function: joinPair " -> "
+  , app: joinPair " "
+  , row: const "()"
+  }
+
+type Tag = Tuple (Additive Int) String
+type Tagged f = Cofree f Tag
+type Tagging a = State Tag a
+
+len :: Tag -> Int
+len = length <<< content
+
+start :: Tag -> Int
+start (Tuple (Additive i) _) = i
+
+end :: Tag -> Int
+end = start + len
+
+content :: Tag -> String
+content (Tuple _ s) = s
+
+tag :: Tagging (ATypeVF (Tagged ATypeVF)) -> Tagged ATypeVF
+tag = flip runState mempty >>> uncurry (flip (:<))
+
+literal :: String -> Tagging Unit
+literal s = modify (_ <> Tuple (Additive (length s)) s)
+
+subresult :: Tagged ATypeVF -> Tagging (Tagged ATypeVF)
+subresult subr = do
+  let Tuple index content = head subr
+  offset <- gets fst
+  literal content
+  pure $ lmap (_ <> offset) <$> subr
+
+simple :: ATypeVF Void -> String -> Tagged ATypeVF
+simple v s = Tuple mempty s :< map absurd v
+
+simpleShowConst ::
+  forall a b sym bleh.
+    IsSymbol sym =>
+    RowCons sym (FProxy (Const a)) bleh ATypeVR =>
+    Show a =>
+  SProxy sym -> Const a b -> Tagged ATypeVF
+simpleShowConst k v = simple (VF.inj k $ rewrap v) $ show $ unwrap v
+
+rewrap :: forall a b c. Const a b -> Const a c
+rewrap (Const a) = Const a
+
+showTagged1 :: Algebra ATypeVF (Tagged ATypeVF)
+showTagged1 = VF.match
+  { name: simpleShowConst (SProxy :: SProxy "name")
+  , var: simpleShowConst (SProxy :: SProxy "var")
+  , function: \(Pair l r) -> tag do
+      a <- subresult l
+      literal " -> "
+      b <- subresult r
+      pure (VF.inj (SProxy :: SProxy "function") (Pair a b))
+  , app: \(Pair l r) -> tag do
+      a <- subresult l
+      literal " "
+      b <- subresult r
+      pure (VF.inj (SProxy :: SProxy "app") (Pair a b))
+  , row: \meh -> tag do
+      literal "meh"
+      pure (VF.inj (SProxy :: SProxy "row") meh)
+  }
+
+--type Zipper = Unit
+--patch :: Tagged ATypeVF -> Zipper -> ATypeV -> Tagged ATypeVF
+--patch current position replacement = ?patch
+
 showAType :: ATypeV -> String
 showAType one = para showInner one
   where
@@ -334,8 +489,9 @@ showAType one = para showInner one
                 "( " <> showFields m <> " | " <> a <> " )"
         }
 
-    showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
-      k <> " :: " <> v
+showFields :: forall a. StrMap (Tuple a String) -> String
+showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
+  k <> " :: " <> v
 
 is ::
   forall sym f bleh rows a.
