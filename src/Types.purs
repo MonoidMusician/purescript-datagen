@@ -3,7 +3,7 @@ module Types where
 import Prelude
 
 import Control.Apply (lift2)
-import Control.Comonad.Cofree (Cofree, head, tail, (:<))
+import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
 import Control.Monad.State (State, evalState, execState, gets, modify, runState)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
@@ -196,11 +196,29 @@ testType = chainr aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Import
   `aTypeFunction` ((atnunqp "Map" `aTypeApp` atnunqp "Module")
     `aTypeApp` (atnunqp "Meh" `aTypeFunction` atnunqp "Eh"))
 
-testTypeL = extract1 right testType
+testTypeL :: Tuple (Maybe (ZipperVF ATypeV Unit)) ATypeV
+testTypeL = extract1 left testType
+
+testTypeLS :: String
 testTypeLS = case testTypeL of
   Tuple (Just z) h ->
     "(" <> simpleShowZ1 (cata simpleShow) z <> ", " <> cata simpleShow h <> ")"
   Tuple Nothing h -> cata simpleShow h
+
+testTypeC :: ATypeVC
+testTypeC = evalState (cata showTagged1 testType) mempty
+
+testTypeLC :: Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
+testTypeLC = extract1C rightC testTypeC
+
+testTypeLSC :: String
+testTypeLSC = case testTypeLC of
+  Tuple (Just z) h ->
+    "(" <> simpleShowZ1 (forget >>> cata simpleShow) z <> ", " <> cata simpleShow (forget h) <> ")"
+  Tuple Nothing h -> cata simpleShow (forget h)
+
+forget :: forall f a. Functor f => Cofree f a -> Mu f
+forget v = tail v # map forget # roll
 
 newtype Module = Module (NonEmpty Array Proper)
 derive newtype instance eqModule :: Eq Module
@@ -427,14 +445,42 @@ extract1 choose this =
   # VF.on _app (lmap (Just <<< VF.inj _app) <<< choose)
   ) (unroll this)
 
-left :: Pair ATypeV -> Tuple (DPair' ATypeV Unit) ATypeV
+extract1' ::
+  (Pair ATypeV -> Tuple (DPair' ATypeV Unit) ATypeV) ->
+  ATypeV -> Tuple ZipperV ATypeV
+extract1' choose = extract1 choose >>> lmap unroll1
+
+extract1C ::
+  (Pair ATypeVC -> Tuple (DPair' ATypeVC Tag) ATypeVC) ->
+  ATypeVC -> Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
+extract1C choose this =
+  ( VF.default (Tuple Nothing this)
+  # VF.on _function (lmap (Just <<< VF.inj _function) <<< choose)
+  # VF.on _app (lmap (Just <<< VF.inj _app) <<< choose)
+  ) (tail this)
+
+extract1C' ::
+  (Pair ATypeVC -> Tuple (DPair' ATypeVC Tag) ATypeVC) ->
+  Tag -> ATypeVC -> Tuple ZipperVC ATypeVC
+extract1C' choose h = extract1C choose >>> lmap (unroll1C h)
+
+left :: forall a. Pair a -> Tuple (DPair' a Unit) a
 left (Pair l r) = Tuple (DPairL' unit r) l
 
-right :: Pair ATypeV -> Tuple (DPair' ATypeV Unit) ATypeV
+right :: forall a. Pair a -> Tuple (DPair' a Unit) a
 right (Pair l r) = Tuple (DPairR' l unit) r
+
+leftC :: Pair ATypeVC -> Tuple (DPair' ATypeVC Tag) ATypeVC
+leftC (Pair l r) = Tuple (DPairL' (head l) r) l
+
+rightC :: Pair ATypeVC -> Tuple (DPair' ATypeVC Tag) ATypeVC
+rightC (Pair l r) = Tuple (DPairR' l (head r)) r
 
 unroll1 :: Maybe (ZipperVF ATypeV Unit) -> ZipperV
 unroll1 = roll <<< Compose <<< map (_ $> roll (Compose Nothing))
+
+unroll1C :: Tag -> Maybe (ZipperVF ATypeVC Tag) -> ZipperVC
+unroll1C h v = h :< Compose (map (mkCofree <@> Compose Nothing) <$> v)
 
 {-
 downZipperVC :: ATypeVC -> ATypeVF (Tuple ZipperVC ATypeVC)
@@ -551,11 +597,12 @@ tag r = do
 
 
 literal :: String -> Tagging Unit
-literal s = modify (map (_ <> s))
+literal s = modify (_ <> Tuple (Additive (length s)) s)
 
 simple :: ATypeVF Void -> String -> Tagging (Tagged ATypeVF)
 simple v s = do
   index <- gets fst
+  literal s
   pure $ Tuple index s :< map absurd v
 
 simpleShowConst ::
