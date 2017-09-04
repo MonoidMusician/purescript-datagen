@@ -3,7 +3,7 @@ module Types where
 import Prelude
 
 import Control.Apply (lift2)
-import Control.Comonad.Cofree (Cofree, head, (:<))
+import Control.Comonad.Cofree (Cofree, head, tail, (:<))
 import Control.Monad.State (State, gets, modify, runState)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
@@ -16,6 +16,7 @@ import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Functor.Variant as VF
 import Data.HeytingAlgebra (ff, tt)
+import Data.Identity (Identity(..))
 import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -28,9 +29,10 @@ import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable, insert) as StrMap
-import Data.String (joinWith, length)
+import Data.String (drop, joinWith, length, take)
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, uncurry)
+import Data.Variant as Variant
 import Matryoshka (Algebra, GAlgebra, cata, para)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -309,7 +311,7 @@ type ATypeVR =
   , var      :: FProxy (Const Ident)
   , function :: FProxy Pair
   , app      :: FProxy Pair
-  , row      :: FProxy (Product StrMap Maybe)
+  -- , row      :: FProxy (Product StrMap Maybe)
   )
 type ATypeVF = VariantF ATypeVR
 type ATypeV = Mu ATypeVF
@@ -321,7 +323,7 @@ type DATypeVR' a da =
   , var      :: Unit
   , function :: DPair' a da
   , app      :: DPair' a da
-  , row      :: Tuple (DStrMap' a da) da
+  -- , row      :: Tuple (DStrMap' a da) da
   )
 data DMu' f df = DIn' (df (Mu f) (DMu' f df)) (DMu' f df)
 
@@ -341,18 +343,12 @@ class Diff a da | a -> da where
   up :: Z a -> a
 class
   ( Functor f
-  , Functor df
+  -- , Functor df
   ) <= Diff1 (f :: Type -> Type) (df :: Type -> Type) | f -> df where
     upF     :: forall x dx. Diff x dx => ZF f x  ->           f x
     --aroundF :: forall x. ZF f x  ->  ZF f (ZF f x)
     --downF   :: forall x.    f x  ->     f (ZF f x)
 {-
-instance diff1Pair :: Diff1 Pair DPair where
-  upF (ZF eh a) =
-    case fromDF eh of
-      DPairR l da   -> Pair l (up (Z ( da) a))
-      DPairL   da r -> Pair   (up (Z ( da) a)) r
-  --aroundF ()
 instance diff1StrMap :: Diff1 a da => Diff1 StrMap DStrMap where
   upF (ZF eh x) = case fromDF eh of
     DStrMap key dx rest ->
@@ -360,6 +356,13 @@ instance diff1StrMap :: Diff1 a da => Diff1 StrMap DStrMap where
 -}
 instance diff1Const :: Diff1 (Const a) (Const Void) where
   upF (ZF eh _) = absurd (unwrap (fromDF eh))
+instance diff1Identity :: Diff1 Identity (Const Unit) where
+  upF (ZF _ x) = Identity x
+instance diff1Pair :: Diff1 Pair DPair where
+  upF (ZF eh a) =
+    case fromDF eh of
+      DPairR l da   -> Pair l (up (Z ( da) a))
+      DPairL   da r -> Pair   (up (Z ( da) a)) r
 {-
 instance diff1Compose ::
   ( Diff1 f df
@@ -367,8 +370,10 @@ instance diff1Compose ::
   ) => Diff1 (Compose f g) (Product (Compose df g) dg) where
     upF (ZF eh x) =
       case fromDF eh of
-        (Product (Tuple (Compose dfg) dg)) -> Compose $
-          ?upF
+        (Product (Tuple (Compose dfg) dg)) ->
+          let
+            g = upF (ZF dg x)
+          in Compose $ ?finalize dg x
 -}
 
 data DPair a = DPairL (D a) a | DPairR a (D a)
@@ -382,7 +387,7 @@ type DATypeVR =
   , var      :: FProxy (Const Unit)
   , function :: FProxy (DPair)
   , app      :: FProxy (DPair)
-  , row      :: FProxy (Product D DStrMap)
+  -- , row      :: FProxy (Product D DStrMap)
   )
 
 joinPair :: String -> Pair String -> String
@@ -394,21 +399,21 @@ simpleShow = VF.match
   , var: unwrap >>> show
   , function: joinPair " -> "
   , app: joinPair " "
-  , row: const "()"
+  --, row: const "()"
   }
 
 type Tag = Tuple (Additive Int) String
 type Tagged f = Cofree f Tag
 type Tagging a = State Tag a
 
-len :: Tag -> Int
-len = length <<< content
+len :: Tag -> Additive Int
+len = Additive <<< length <<< content
 
-start :: Tag -> Int
-start (Tuple (Additive i) _) = i
+start :: Tag -> Additive Int
+start (Tuple i _) = i
 
-end :: Tag -> Int
-end = start + len
+end :: Tag -> Additive Int
+end = start <> len
 
 content :: Tag -> String
 content (Tuple _ s) = s
@@ -454,14 +459,58 @@ showTagged1 = VF.match
       literal " "
       b <- subresult r
       pure (VF.inj (SProxy :: SProxy "app") (Pair a b))
-  , row: \meh -> tag do
-      literal "meh"
-      pure (VF.inj (SProxy :: SProxy "row") meh)
+  --, row: \meh -> tag do
+      --literal "meh"
+      --pure (VF.inj (SProxy :: SProxy "row") meh)
   }
 
---type Zipper = Unit
---patch :: Tagged ATypeVF -> Zipper -> ATypeV -> Tagged ATypeVF
---patch current position replacement = ?patch
+type ZipperVR a =
+  ( function :: FProxy (DPair' a)
+  , app :: FProxy (DPair' a)
+  )
+type ZipperVF a = VariantF (ZipperVR a)
+type ZipperVF' a = Compose Maybe (ZipperVF a)
+type ZipperV = Mu (ZipperVF' ATypeV)
+patch :: Tagged (ZipperVF' (Tagged ATypeVF)) -> ATypeV -> Tagged ATypeVF
+patch positioned replacement =
+  let
+    caput = head positioned
+    st = start caput
+    sz = len caput
+    old = content caput
+  in case tail positioned of
+    Compose Nothing ->
+      lmap (_ <> st) <$> cata showTagged1 replacement
+    Compose (Just inside) ->
+      let
+        next ::
+          forall sym bleh.
+            IsSymbol sym =>
+            RowCons sym (FProxy Pair) bleh ATypeVR =>
+          SProxy sym -> DPair' (Tagged ATypeVF) (Tagged (ZipperVF' (Tagged ATypeVF))) -> Tagged ATypeVF
+        next k (DPairL' da a) =
+          let
+            startAt = start (head updated)
+            endAt = end (head updated)
+            before = take (unwrap startAt) old
+            after = drop (unwrap endAt) old
+            updated = patch da replacement
+            spliced = before <> content (head updated) <> after
+            diff = Additive $ length spliced - (unwrap sz)
+          in Tuple st spliced :< (VF.inj k $ Pair updated $ lmap (_ <> diff) <$> a)
+        next k (DPairR' a da) =
+          let
+            startAt = start (head updated)
+            endAt = end (head updated)
+            before = take (unwrap startAt) old
+            after = drop (unwrap endAt) old
+            updated = patch da replacement
+            spliced = before <> content (head updated) <> after
+          in Tuple st spliced :< (VF.inj k $ Pair a $ patch da replacement)
+      in inside # VF.match
+        { function: next (SProxy :: SProxy "function")
+        , app: next (SProxy :: SProxy "app")
+        }
 
 showAType :: ATypeV -> String
 showAType one = para showInner one
@@ -481,12 +530,12 @@ showAType one = para showInner one
                 left = wrapIf' l (isTypeFunction f)
                 right = wrapIf' r (isTypeApp a || isTypeFunction a)
               in left <> " " <> right
-        , row:
-            case _ of
-              Product (Tuple m Nothing) ->
-                "( " <> showFields m <> " )"
-              Product (Tuple m (Just (Tuple _ a))) ->
-                "( " <> showFields m <> " | " <> a <> " )"
+        --, row:
+            --case _ of
+              --Product (Tuple m Nothing) ->
+                --"( " <> showFields m <> " )"
+              --Product (Tuple m (Just (Tuple _ a))) ->
+                --"( " <> showFields m <> " | " <> a <> " )"
         }
 
 showFields :: forall a. StrMap (Tuple a String) -> String
