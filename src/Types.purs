@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Apply (lift2)
 import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
-import Control.Monad.State (State, evalState, execState, gets, modify, runState)
+import Control.Monad.State (State, evalState, gets, modify)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
 import Data.Bifunctor (lmap)
@@ -29,9 +29,9 @@ import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable) as StrMap
-import Data.String (drop, joinWith, length, take)
+import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replace, replaceAll, take)
 import Data.Symbol (class IsSymbol)
-import Data.Tuple (Tuple(..), fst, snd, uncurry)
+import Data.Tuple (Tuple(..), fst, uncurry)
 import Matryoshka (Algebra, GAlgebra, cata, para)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -208,8 +208,14 @@ testTypeLS = case testTypeL of
 testTypeC :: ATypeVC
 testTypeC = evalState (cata showTagged1 testType) mempty
 
+testTypeCS :: String
+testTypeCS = cofrecurse testTypeC
+
 testTypeLC :: Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
 testTypeLC = extract1C rightC testTypeC
+
+testTypeLC' :: Tuple ZipperVC ATypeVC
+testTypeLC' = extract1C' rightC mempty testTypeC
 
 testTypeLSC :: String
 testTypeLSC = case testTypeLC of
@@ -217,8 +223,34 @@ testTypeLSC = case testTypeLC of
     "(" <> simpleShowZ1 (forget >>> cata simpleShow) z <> ", " <> cata simpleShow (forget h) <> ")"
   Tuple Nothing h -> cata simpleShow (forget h)
 
+testPatchSameR :: ATypeVC
+testPatchSameR = uncurry patch $ map forget testTypeLC'
+
+testPatchSameL :: ATypeVC
+testPatchSameL = uncurry patch $ map forget $ extract1C' leftC mempty testTypeC
+
+testPatchExplodeR :: ATypeVC
+testPatchExplodeR = patch (fst testTypeLC') testType
+
+testPatchExplodeL :: ATypeVC
+testPatchExplodeL = patch (fst $ extract1C' leftC mempty testTypeC) testType
+
 forget :: forall f a. Functor f => Cofree f a -> Mu f
 forget v = tail v # map forget # roll
+
+badindent :: String -> String
+badindent = replaceAll (Pattern "\n") (Replacement "\n  ")
+
+cofrecurse :: ATypeVC -> String
+cofrecurse v = show (head v) <> " :< " <>
+  ( VF.case_
+  # VF.on _var (unwrap >>> show)
+  # VF.on _name (unwrap >>> show)
+  # VF.on _function (\(Pair l r) -> "function" <>
+      badindent ("\n" <> cofrecurse l <> "\n" <> cofrecurse r))
+  # VF.on _app (\(Pair l r) -> "app" <>
+      badindent ("\n" <> cofrecurse l <> "\n" <> cofrecurse r))
+  ) (tail v)
 
 newtype Module = Module (NonEmpty Array Proper)
 derive newtype instance eqModule :: Eq Module
@@ -462,7 +494,8 @@ extract1C choose this =
 extract1C' ::
   (Pair ATypeVC -> Tuple (DPair' ATypeVC Tag) ATypeVC) ->
   Tag -> ATypeVC -> Tuple ZipperVC ATypeVC
-extract1C' choose h = extract1C choose >>> lmap (unroll1C h)
+extract1C' choose h v =
+  extract1C choose v # lmap (unroll1C (head v))
 
 left :: forall a. Pair a -> Tuple (DPair' a Unit) a
 left (Pair l r) = Tuple (DPairL' unit r) l
@@ -574,7 +607,7 @@ simpleShow = VF.match
 
 type Tag = Tuple (Additive Int) String
 type Tagged f = Cofree f Tag
-type Tagging a = State Tag a
+type Tagging a = State (String) a
 
 len :: Tag -> Additive Int
 len = Additive <<< length <<< content
@@ -590,20 +623,18 @@ content (Tuple _ s) = s
 
 tag :: Tagging (ATypeVF (Tagged ATypeVF)) -> Tagging (Tagged ATypeVF)
 tag r = do
-  offset <- gets fst
+  offset <- gets (Additive <<< length)
   res <- r
-  added <- gets (snd >>> drop (unwrap offset))
+  added <- gets (drop (unwrap offset))
   pure (Tuple offset added :< res)
 
-
 literal :: String -> Tagging Unit
-literal s = modify (_ <> Tuple (Additive (length s)) s)
+literal s = modify (_ <> s)
 
 simple :: ATypeVF Void -> String -> Tagging (Tagged ATypeVF)
-simple v s = do
-  index <- gets fst
+simple v s = tag do
   literal s
-  pure $ Tuple index s :< map absurd v
+  pure (map absurd v)
 
 simpleShowConst ::
   forall a b sym bleh.
@@ -635,7 +666,11 @@ showTagged1 = VF.match
       --pure (VF.inj (SProxy :: SProxy "row") meh)
   }
 
-patch :: Tagged (ZipperVF' (Tagged ATypeVF)) -> ATypeV -> Tagged ATypeVF
+evalFrom :: Additive Int -> Tagging (Tagged ATypeVF) -> Tagged ATypeVF
+evalFrom st producer =
+  lmap (_ <> st) <$> evalState producer ""
+
+patch :: ZipperVC -> ATypeV -> ATypeVC
 patch positioned replacement =
   let
     caput = head positioned
@@ -644,7 +679,7 @@ patch positioned replacement =
     old = content caput
   in case tail positioned of
     Compose Nothing ->
-      evalState (cata showTagged1 replacement) (Tuple st "")
+      evalFrom st $ cata showTagged1 replacement
     Compose (Just inside) ->
       let
         next ::
@@ -663,7 +698,7 @@ patch positioned replacement =
           let
             updated = patch da replacement
             Tuple diff spliced = patch1 old (head da) (content (head updated))
-          in (Tuple st spliced :< VF.inj k (Pair updated a))
+          in (Tuple st spliced :< VF.inj k (Pair a updated))
       in inside # VF.match
         { function: next (SProxy :: SProxy "function")
         , app: next (SProxy :: SProxy "app")
@@ -679,14 +714,6 @@ patch1 within old new =
 
 patchAfter :: Additive Int -> Tagged ATypeVF -> Tagged ATypeVF
 patchAfter diff = (lmap (_ <> diff) <$> _)
-
--- | Obviously wrong
-splice :: Tag -> Tag -> String
-splice old new =
-  let
-    before = take (unwrap (start new)) (content old)
-    after = drop (unwrap (end new)) (content old)
-  in before <> content new <> after
 
 showAType :: ATypeV -> String
 showAType one = para showInner one
