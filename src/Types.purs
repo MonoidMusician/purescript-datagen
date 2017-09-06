@@ -29,7 +29,7 @@ import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable) as StrMap
-import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replace, replaceAll, take)
+import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replaceAll, take)
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, uncurry)
 import Matryoshka (Algebra, GAlgebra, cata, para)
@@ -192,9 +192,12 @@ atnunqp :: String -> ATypeV
 atnunqp = aTypeName <<< Unqualified <<< Proper
 
 testType :: ATypeV
-testType = chainr aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Imports", "ImportModule"])
+testType = chainl aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Imports", "ImportModule"])
   `aTypeFunction` ((atnunqp "Map" `aTypeApp` atnunqp "Module")
     `aTypeApp` (atnunqp "Meh" `aTypeFunction` atnunqp "Eh"))
+
+otherTest :: ATypeV
+otherTest = chainl aTypeFunction (Unqualified <<< Proper <$> "Heus" :| ["Yo", "Hey"])
 
 testTypeL :: Tuple (Maybe (ZipperVF ATypeV Unit)) ATypeV
 testTypeL = extract1 left testType
@@ -215,7 +218,7 @@ testTypeLC :: Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
 testTypeLC = extract1C rightC testTypeC
 
 testTypeLC' :: Tuple ZipperVC ATypeVC
-testTypeLC' = extract1C' rightC mempty testTypeC
+testTypeLC' = extract1C' rightC testTypeC
 
 testTypeLSC :: String
 testTypeLSC = case testTypeLC of
@@ -227,13 +230,13 @@ testPatchSameR :: ATypeVC
 testPatchSameR = uncurry patch $ map forget testTypeLC'
 
 testPatchSameL :: ATypeVC
-testPatchSameL = uncurry patch $ map forget $ extract1C' leftC mempty testTypeC
+testPatchSameL = uncurry patch $ map forget $ extract1C' leftC testTypeC
 
 testPatchExplodeR :: ATypeVC
-testPatchExplodeR = patch (fst testTypeLC') testType
+testPatchExplodeR = patch (fst testTypeLC') otherTest
 
 testPatchExplodeL :: ATypeVC
-testPatchExplodeL = patch (fst $ extract1C' leftC mempty testTypeC) testType
+testPatchExplodeL = patch (fst $ extract1C' leftC testTypeC) otherTest
 
 forget :: forall f a. Functor f => Cofree f a -> Mu f
 forget v = tail v # map forget # roll
@@ -415,8 +418,7 @@ simpleShowZ inner = VF.match
     showDPair' s (DPairR' a da) = inner a <> s <> "{" <> da <> "}"
 
 simpleShowZ1 :: forall a s. Show s => (a -> String) -> ZipperVF a s -> String
-simpleShowZ1 inner v = simpleShowZ inner
-  (v <#> show)
+simpleShowZ1 inner v = simpleShowZ inner (v <#> show)
 
 _name = SProxy :: SProxy "name"
 _var = SProxy :: SProxy "var"
@@ -425,10 +427,10 @@ _app = SProxy :: SProxy "app"
 
 downZipperVF :: forall a da. (a -> da) -> ATypeVF a -> ATypeVF (ZipperVF a da)
 downZipperVF down = VF.case_
-    # VF.on _name (VF.inj _name <<< rewrap)
-    # VF.on _var (VF.inj _var <<< rewrap)
-    # VF.on _function (downDPair' down >>> rePair' _function)
-    # VF.on _app (downDPair' down >>> rePair' _app)
+  # VF.on _name (VF.inj _name <<< rewrap)
+  # VF.on _var (VF.inj _var <<< rewrap)
+  # VF.on _function (downDPair' down >>> rePair' _function)
+  # VF.on _app (downDPair' down >>> rePair' _app)
 
 rePair' ::
   forall a da sym bleh meh.
@@ -459,14 +461,12 @@ _ -> b == inj "function" $ DPairL' Unit (b :: ATypeV)
 
 downZipper1 :: ATypeV -> ATypeVF (ZipperVF ATypeV ATypeV)
 downZipper1 v =
-  let
-    t = unroll v
-    dot = VF.case_
-      # VF.on _name (VF.inj _name <<< rewrap)
-      # VF.on _var (VF.inj _var <<< rewrap)
-      # VF.on _function (downDPair' id >>> rePair' _function)
-      # VF.on _app (downDPair' id >>> rePair' _app)
-  in dot t
+  ( VF.case_
+  # VF.on _name (VF.inj _name <<< rewrap)
+  # VF.on _var (VF.inj _var <<< rewrap)
+  # VF.on _function (downDPair' id >>> rePair' _function)
+  # VF.on _app (downDPair' id >>> rePair' _app)
+  ) (unroll v)
 
 extract1 ::
   (Pair ATypeV -> Tuple (DPair' ATypeV Unit) ATypeV) ->
@@ -493,8 +493,8 @@ extract1C choose this =
 
 extract1C' ::
   (Pair ATypeVC -> Tuple (DPair' ATypeVC Tag) ATypeVC) ->
-  Tag -> ATypeVC -> Tuple ZipperVC ATypeVC
-extract1C' choose h v =
+  ATypeVC -> Tuple ZipperVC ATypeVC
+extract1C' choose v =
   extract1C choose v # lmap (unroll1C (head v))
 
 left :: forall a. Pair a -> Tuple (DPair' a Unit) a
@@ -607,7 +607,7 @@ simpleShow = VF.match
 
 type Tag = Tuple (Additive Int) String
 type Tagged f = Cofree f Tag
-type Tagging a = State (String) a
+type Tagging a = State String a
 
 len :: Tag -> Additive Int
 len = Additive <<< length <<< content
