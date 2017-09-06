@@ -4,12 +4,13 @@ import Prelude
 
 import Control.Apply (lift2)
 import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
-import Control.Monad.State (State, evalState, gets, modify)
+import Control.Monad.State (State, gets, modify, runState)
 import Data.Array (concatMap, last, uncons, unsnoc)
 import Data.Array (fromFoldable) as Array
 import Data.Bifunctor (lmap)
 import Data.Const (Const(..))
 import Data.Either (Either)
+import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
@@ -31,7 +32,7 @@ import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable) as StrMap
 import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replaceAll, take)
 import Data.Symbol (class IsSymbol)
-import Data.Tuple (Tuple(..), fst, uncurry)
+import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Matryoshka (Algebra, GAlgebra, cata, para)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -77,16 +78,16 @@ aTypeProduct ::
 aTypeProduct k a b = aType $ VF.inj k $ Product $ Tuple a b
 
 aTypeApp :: ATypeV -> ATypeV -> ATypeV
-aTypeApp = aTypePair (SProxy :: SProxy "app")
+aTypeApp = aTypePair _app
 
 aTypeFunction :: ATypeV -> ATypeV -> ATypeV
-aTypeFunction = aTypePair (SProxy :: SProxy "function")
+aTypeFunction = aTypePair _function
 
 aTypeName :: Qualified Proper -> ATypeV
-aTypeName = aTypeConst (SProxy :: SProxy "name")
+aTypeName = aTypeConst _name
 
 aTypeVar :: Ident -> ATypeV
-aTypeVar = aTypeConst (SProxy :: SProxy "var")
+aTypeVar = aTypeConst _var
 
 typeAbsType :: Ident -> TypeAbs
 typeAbsType = TypeAbs <@> Nothing
@@ -208,17 +209,18 @@ testTypeLS = case testTypeL of
     "(" <> simpleShowZ1 (cata simpleShow) z <> ", " <> cata simpleShow h <> ")"
   Tuple Nothing h -> cata simpleShow h
 
-testTypeC :: ATypeVC
-testTypeC = evalState (cata showTagged1 testType) mempty
+testTypeC :: Tuple String ATypeVC
+testTypeC = case showTagged testType of
+  Tuple s v -> Tuple s $ Tuple mempty (Additive (length s)) :< v
 
 testTypeCS :: String
-testTypeCS = cofrecurse testTypeC
+testTypeCS = cofrecurse (snd testTypeC)
 
 testTypeLC :: Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
-testTypeLC = extract1C rightC testTypeC
+testTypeLC = extract1C rightC (snd testTypeC)
 
 testTypeLC' :: Tuple ZipperVC ATypeVC
-testTypeLC' = extract1C' rightC testTypeC
+testTypeLC' = extract1C' rightC (snd testTypeC)
 
 testTypeLSC :: String
 testTypeLSC = case testTypeLC of
@@ -226,17 +228,17 @@ testTypeLSC = case testTypeLC of
     "(" <> simpleShowZ1 (forget >>> cata simpleShow) z <> ", " <> cata simpleShow (forget h) <> ")"
   Tuple Nothing h -> cata simpleShow (forget h)
 
-testPatchSameR :: ATypeVC
-testPatchSameR = uncurry patch $ map forget testTypeLC'
+testPatchSameR :: Tuple String ATypeVC
+testPatchSameR = uncurry patch (map forget testTypeLC') (fst testTypeC) mempty
 
-testPatchSameL :: ATypeVC
-testPatchSameL = uncurry patch $ map forget $ extract1C' leftC testTypeC
+testPatchSameL :: Tuple String ATypeVC
+testPatchSameL = uncurry patch (map forget $ extract1C' leftC (snd testTypeC)) (fst testTypeC) mempty
 
-testPatchExplodeR :: ATypeVC
-testPatchExplodeR = patch (fst testTypeLC') otherTest
+testPatchExplodeR :: Tuple String ATypeVC
+testPatchExplodeR = patch (fst testTypeLC') otherTest (fst testTypeC) mempty
 
-testPatchExplodeL :: ATypeVC
-testPatchExplodeL = patch (fst $ extract1C' leftC testTypeC) otherTest
+testPatchExplodeL :: Tuple String ATypeVC
+testPatchExplodeL = patch (fst $ extract1C' leftC (snd testTypeC)) otherTest (fst testTypeC) mempty
 
 forget :: forall f a. Functor f => Cofree f a -> Mu f
 forget v = tail v # map forget # roll
@@ -605,115 +607,122 @@ simpleShow = VF.match
   --, row: const "()"
   }
 
-type Tag = Tuple (Additive Int) String
+-- | A tag consists of the following:
+-- |   1. the starting index *relative to the parent*
+-- |   2. the length of the string that represents this chunk
+type Tag = Tuple (Additive Int) (Additive Int)
+-- | A tagged recursive structure of `Cofree` and `Tag`.
 type Tagged f = Cofree f Tag
+-- | Used before a Cofree is tagged.
+type Untagged f = f (Tagged f)
+-- | While building up a tag, accumulate a `String` of the current content,
+-- | which also gives the index relative to the parent (see `Tag`).
 type Tagging a = State String a
 
+-- | Length of the representation of this chunk (second component of `Tag`).
 len :: Tag -> Additive Int
-len = Additive <<< length <<< content
+len (Tuple _ l) = l
 
+-- | Start of this chunk, relative to parent (first component of `Tag`).
 start :: Tag -> Additive Int
 start (Tuple i _) = i
 
+-- | End of this chunk, relative to the start of the parent (sum of components).
 end :: Tag -> Additive Int
 end = start <> len
 
-content :: Tag -> String
-content (Tuple _ s) = s
+tag :: Tagging (Untagged ATypeVF) -> Tuple String (Untagged ATypeVF)
+tag = swap <<< (runState <@> mempty)
 
-tag :: Tagging (ATypeVF (Tagged ATypeVF)) -> Tagging (Tagged ATypeVF)
-tag r = do
+recur :: Tuple String (Untagged ATypeVF) -> Tagging (Tagged ATypeVF)
+recur (Tuple s r) = do
   offset <- gets (Additive <<< length)
-  res <- r
-  added <- gets (drop (unwrap offset))
-  pure (Tuple offset added :< res)
+  literal s
+  pure $ Tuple offset (Additive (length s)) :< r
 
 literal :: String -> Tagging Unit
 literal s = modify (_ <> s)
 
-simple :: ATypeVF Void -> String -> Tagging (Tagged ATypeVF)
-simple v s = tag do
-  literal s
-  pure (map absurd v)
+simple :: ATypeVF Void -> String -> Tuple String (Untagged ATypeVF)
+simple v s = Tuple s $ map absurd v
 
 simpleShowConst ::
   forall a b sym bleh.
     IsSymbol sym =>
     RowCons sym (FProxy (Const a)) bleh ATypeVR =>
     Show a =>
-  SProxy sym -> Const a b -> Tagging (Tagged ATypeVF)
+  SProxy sym -> Const a b -> Tuple String (ATypeVF (Tagged ATypeVF))
 simpleShowConst k v = simple (VF.inj k $ rewrap v) $ show $ unwrap v
 
 rewrap :: forall a b c. Const a b -> Const a c
 rewrap (Const a) = Const a
 
-showTagged1 :: Algebra ATypeVF (Tagging (Tagged ATypeVF))
+showTagged1 :: Algebra ATypeVF (Tuple String (Untagged ATypeVF))
 showTagged1 = VF.match
-  { name: simpleShowConst (SProxy :: SProxy "name")
-  , var: simpleShowConst (SProxy :: SProxy "var")
+  { name: simpleShowConst _name
+  , var: simpleShowConst _var
   , function: \(Pair l r) -> tag do
-      a <- l
+      a <- recur l
       literal " -> "
-      b <- r
-      pure (VF.inj (SProxy :: SProxy "function") (Pair a b))
+      b <- recur r
+      pure (VF.inj _function (Pair a b))
   , app: \(Pair l r) -> tag do
-      a <- l
+      a <- recur l
       literal " "
-      b <- r
-      pure (VF.inj (SProxy :: SProxy "app") (Pair a b))
+      b <- recur r
+      pure (VF.inj _app (Pair a b))
   --, row: \meh -> tag do
       --literal "meh"
       --pure (VF.inj (SProxy :: SProxy "row") meh)
   }
 
-evalFrom :: Additive Int -> Tagging (Tagged ATypeVF) -> Tagged ATypeVF
-evalFrom st producer =
-  lmap (_ <> st) <$> evalState producer ""
+showTagged :: ATypeV -> Tuple String (Untagged ATypeVF)
+showTagged = cata showTagged1
 
-patch :: ZipperVC -> ATypeV -> ATypeVC
+evalFrom :: Additive Int -> Tuple String (Untagged ATypeVF) -> Tuple String ATypeVC
+evalFrom st (Tuple s v) =
+  Tuple s $ Tuple st (Additive (length s)) :< v
+
+patch :: ZipperVC -> ATypeV -> (String -> Additive Int -> Tuple String ATypeVC)
 patch positioned replacement =
   let
     caput = head positioned
     st = start caput
     sz = len caput
-    old = content caput
+    fn = end caput
   in case tail positioned of
-    Compose Nothing ->
-      evalFrom st $ cata showTagged1 replacement
-    Compose (Just inside) ->
+    Compose Nothing -> \old i ->
+      let
+        before = take (unwrap (i <> st)) old
+        after  = drop (unwrap (i <> fn)) old
+        Tuple slice node = evalFrom st $ showTagged replacement
+        spliced = before <> slice <> after
+      in Tuple spliced node
+    Compose (Just inside) -> \old i ->
       let
         next ::
           forall sym bleh.
             IsSymbol sym =>
             RowCons sym (FProxy Pair) bleh ATypeVR =>
-          SProxy sym ->
-          DPair' (Tagged ATypeVF) (Tagged (ZipperVF' (Tagged ATypeVF))) ->
-          Tagged ATypeVF
+          SProxy sym -> DPair' ATypeVC ZipperVC -> Tuple String ATypeVC
         next k (DPairL' da a) =
           let
-            updated = patch da replacement
-            Tuple diff spliced = patch1 old (head da) (content (head updated))
-          in (Tuple st spliced :< VF.inj k (Pair updated $ patchAfter diff a))
+            Tuple new updated = patch da replacement old i
+            diff = Additive $ ((-) `on` length) new old
+            -- The index of the second component may have changed relative to
+            -- the parent, if the length of the string changed.
+            rest = (head a <> Tuple diff mempty) :< tail a
+          in Tuple new (Tuple st (sz <> diff) :< VF.inj k (Pair updated rest))
         next k (DPairR' a da) =
           let
-            updated = patch da replacement
-            Tuple diff spliced = patch1 old (head da) (content (head updated))
-          in (Tuple st spliced :< VF.inj k (Pair a updated))
+            -- Accumulate this offset from the start.
+            Tuple new updated = patch da replacement old (i <> st)
+            diff = Additive $ ((-) `on` length) new old
+          in Tuple new (Tuple st (sz <> diff) :< VF.inj k (Pair a updated))
       in inside # VF.match
-        { function: next (SProxy :: SProxy "function")
-        , app: next (SProxy :: SProxy "app")
+        { function: next _function
+        , app: next _app
         }
-
-patch1 :: String -> Tag -> String -> Tag
-patch1 within old new =
-  let
-    diff = Additive $ length new - unwrap (len old)
-    before = take (unwrap (start old)) within
-    after = drop (unwrap (end old)) within
-  in Tuple diff (before <> new <> after)
-
-patchAfter :: Additive Int -> Tagged ATypeVF -> Tagged ATypeVF
-patchAfter diff = (lmap (_ <> diff) <$> _)
 
 showAType :: ATypeV -> String
 showAType one = para showInner one
@@ -753,9 +762,9 @@ is ::
 is k = VF.on k tt $ VF.default ff
 
 isTypeFunction :: ATypeV -> Boolean
-isTypeFunction = unroll >>> is (SProxy :: SProxy "function")
+isTypeFunction = unroll >>> is _function
 isTypeApp :: ATypeV -> Boolean
-isTypeApp = unroll >>> is (SProxy :: SProxy "app")
+isTypeApp = unroll >>> is _app
 
 data AKindF a
   = KindName (Qualified Proper)

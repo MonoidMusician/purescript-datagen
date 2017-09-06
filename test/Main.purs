@@ -3,24 +3,27 @@ module Test.Main where
 import Control.Comonad.Cofree (head)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (log, logShow)
-import Prelude (Unit, discard, bind)
+import Data.Bitraversable (bitraverse)
+import Data.Tuple (snd)
+import Prelude (Unit, bind, discard, map, void, (>>>))
 import Types (thisModule, showModuleData, cofrecurse, testTypeLS, testTypeC, testTypeLSC, testTypeCS, testPatchSameR, testPatchSameL, testPatchExplodeR, testPatchExplodeL)
 import Unsafe.Coerce (unsafeCoerce)
 
 main :: Eff _ Unit
 main = do
+  let showy = bitraverse logShow (cofrecurse >>> log) >>> void
   log testTypeLS
-  logShow (head testTypeC)
+  logShow (head (snd testTypeC))
   log "----------"
   log testTypeCS
   log "---------- SameR"
-  log (cofrecurse testPatchSameR)
+  showy testPatchSameR
   log "---------- SameL"
-  log (cofrecurse testPatchSameL)
+  showy testPatchSameL
   log "---------- ExplodeR"
-  log (cofrecurse testPatchExplodeR)
+  showy testPatchExplodeR
   log "---------- ExplodeL"
-  log (cofrecurse testPatchExplodeL)
+  showy testPatchExplodeL
   log "---------- "
   log testTypeLSC
   log (showModuleData thisModule)
