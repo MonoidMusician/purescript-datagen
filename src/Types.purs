@@ -16,7 +16,6 @@ import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Functor.Variant as VF
-import Data.HeytingAlgebra (ff, tt)
 import Data.Identity (Identity(..))
 import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
@@ -29,11 +28,11 @@ import Data.Pair (Pair(..))
 import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
-import Data.StrMap (toUnfoldable) as StrMap
+import Data.StrMap (toUnfoldable, insert) as StrMap
 import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replaceAll, take)
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
-import Matryoshka (class Recursive, Algebra, GAlgebra, cata, para, project)
+import Matryoshka (class Recursive, Algebra, cata, project)
 import Unsafe.Coerce (unsafeCoerce)
 
 onlyType :: Proper -> Import
@@ -194,11 +193,11 @@ atnunqp = aTypeName <<< Unqualified <<< Proper
 
 testType :: ATypeV
 testType = chainl aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Imports", "ImportModule"])
-  `aTypeFunction` ((atnunqp "Map" `aTypeApp` atnunqp "Module")
+  `aTypeFunction` ((atnunqp "Map" `aTypeApp` (atnunqp "Maybe" `aTypeApp` atnunqp "Module"))
     `aTypeApp` (atnunqp "Meh" `aTypeFunction` atnunqp "Eh"))
 
 otherTest :: ATypeV
-otherTest = chainl aTypeFunction (Unqualified <<< Proper <$> "Heus" :| ["Yo", "Hey"])
+otherTest = chainr aTypeFunction (Unqualified <<< Proper <$> "Heus" :| ["Yo", "Hey"])
 
 testTypeL :: Tuple (Maybe (ZipperVF ATypeV Unit)) ATypeV
 testTypeL = extract1 left testType
@@ -206,8 +205,8 @@ testTypeL = extract1 left testType
 testTypeLS :: String
 testTypeLS = case testTypeL of
   Tuple (Just z) h ->
-    "(" <> simpleShowZ1 (cata simpleShow) z <> ", " <> cata simpleShow h <> ")"
-  Tuple Nothing h -> cata simpleShow h
+    "(" <> simpleShowZ1 showAType z <> ", " <> showAType h <> ")"
+  Tuple Nothing h -> showAType h
 
 testTypeC :: Tuple String ATypeVC
 testTypeC = case showTagged testType of
@@ -225,8 +224,8 @@ testTypeLC' = extract1C' rightC (snd testTypeC)
 testTypeLSC :: String
 testTypeLSC = case testTypeLC of
   Tuple (Just z) h ->
-    "(" <> simpleShowZ1 (forget >>> cata simpleShow) z <> ", " <> cata simpleShow (forget h) <> ")"
-  Tuple Nothing h -> cata simpleShow (forget h)
+    "(" <> simpleShowZ1 (forget >>> showAType) z <> ", " <> showAType (forget h) <> ")"
+  Tuple Nothing h -> showAType (forget h)
 
 testPatchSameR :: Tuple String ATypeVC
 testPatchSameR = uncurry patch (map forget testTypeLC') (fst testTypeC) mempty Nothing
@@ -247,13 +246,13 @@ badindent :: String -> String
 badindent = replaceAll (Pattern "\n") (Replacement "\n  ")
 
 cofrecurse :: ATypeVC -> String
-cofrecurse v = show (head v) <> " :< " <>
+cofrecurse v = let t = " >: " <> show (head v) in
   ( VF.case_
-  # VF.on _var (unwrap >>> show)
-  # VF.on _name (unwrap >>> show)
-  # VF.on _function (\(Pair l r) -> "function" <>
+  # VF.on _var (unwrap >>> show >>> (_ <> t))
+  # VF.on _name (unwrap >>> show >>> (_ <> t))
+  # VF.on _function (\(Pair l r) -> "function" <> t <>
       badindent ("\n" <> cofrecurse l <> "\n" <> cofrecurse r))
-  # VF.on _app (\(Pair l r) -> "app" <>
+  # VF.on _app (\(Pair l r) -> "app" <> t <>
       badindent ("\n" <> cofrecurse l <> "\n" <> cofrecurse r))
   ) (tail v)
 
@@ -339,13 +338,10 @@ instance monoidConstructors :: Monoid Constructors where
 
 wrap :: String -> String
 wrap a = "(" <> a <> ")"
-wrapIf :: Boolean -> String -> String
-wrapIf true = wrap
-wrapIf false = id
-wrapIf' :: String -> Boolean -> String
-wrapIf' = flip wrapIf
-wrapIfl :: forall a. (a -> Boolean) -> (a -> String) -> (a -> String)
-wrapIfl = lift2 wrapIf
+
+joinWithIfNE :: forall a. String -> (a -> String) -> Array a -> String
+joinWithIfNE _ _ [] = ""
+joinWithIfNE sep f as = sep <> joinWith sep (f <$> as)
 
 data DataType
   = TypeAlias ATypeV
@@ -353,11 +349,7 @@ data DataType
 instance showDataType :: Show DataType where
   show (TypeAlias t) = showAType t
   show (SumType m) = joinWith " | " $ Map.toAscUnfoldable m <#> \(Tuple c ts) ->
-    show c <> case ts of
-      [] -> ""
-      _ ->
-        " " <> joinWith " "
-          (wrapIfl (isTypeFunction || isTypeApp) showAType <$> ts)
+    show c <> joinWithIfNE " " (showAType' (Just FnAppParen)) ts
 data DeclKeyword = TType | TNewtype | TData
 derive instance eqDeclKeyword :: Eq DeclKeyword
 derive instance ordDeclKeyword :: Ord DeclKeyword
@@ -517,16 +509,6 @@ unroll1 = roll <<< Compose <<< map (_ $> roll (Compose Nothing))
 unroll1C :: Tag -> Maybe (ZipperVF ATypeVC Tag) -> ZipperVC
 unroll1C h v = h :< Compose (map (mkCofree <@> Compose Nothing) <$> v)
 
-{-
-downZipperVC :: ATypeVC -> ATypeVF (Tuple ZipperVC ATypeVC)
-downZipperVC v =
-  let
-    h = head v :: Tag
-    t = tail v :: ATypeVF (ATypeVC)
-    dot = ?dot
-  in h :< dot
--}
-
 downDPair' :: forall a da. (a -> da) -> Pair a -> Pair (DPair' a da)
 downDPair' down (Pair l r) = Pair
   (DPairL' (down l) r)
@@ -553,12 +535,11 @@ class
     upF     :: forall x dx. Diff x dx => ZF f x  ->           f x
     --aroundF :: forall x. ZF f x  ->  ZF f (ZF f x)
     --downF   :: forall x.    f x  ->     f (ZF f x)
-{-
-instance diff1StrMap :: Diff1 a da => Diff1 StrMap DStrMap where
-  upF (ZF eh x) = case fromDF eh of
-    DStrMap key dx rest ->
-      StrMap.insert key (upF (ZF (toDF dx) x)) rest
--}
+instance diff1StrMap :: Diff1 StrMap DStrMap where
+  upF (ZF eh a) =
+    case fromDF eh of
+      DStrMap key da rest ->
+        StrMap.insert key (up (Z da a)) rest
 instance diff1Const :: Diff1 (Const a) (Const Void) where
   upF (ZF eh _) = absurd (unwrap (fromDF eh))
 instance diff1Identity :: Diff1 Identity (Const Unit) where
@@ -566,8 +547,8 @@ instance diff1Identity :: Diff1 Identity (Const Unit) where
 instance diff1Pair :: Diff1 Pair DPair where
   upF (ZF eh a) =
     case fromDF eh of
-      DPairR l da   -> Pair l (up (Z ( da) a))
-      DPairL   da r -> Pair   (up (Z ( da) a)) r
+      DPairR l da   -> Pair l (up (Z da a))
+      DPairL   da r -> Pair   (up (Z da a)) r
 {-
 instance diff1Compose ::
   ( Diff1 f df
@@ -595,18 +576,6 @@ type DATypeVR =
   -- , row      :: FProxy (Product D DStrMap)
   )
 
-joinPair :: String -> Pair String -> String
-joinPair m (Pair l r) = l <> m <> r
-
-simpleShow :: Algebra ATypeVF String
-simpleShow = VF.match
-  { name: unwrap >>> show
-  , var: unwrap >>> show
-  , function: joinPair " -> "
-  , app: joinPair " "
-  --, row: const "()"
-  }
-
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
 -- |   2. the length of the string that represents this chunk
@@ -618,18 +587,6 @@ type Untagged f = f (Tagged f)
 -- | While building up a tag, accumulate a `String` of the current content,
 -- | which also gives the index relative to the parent (see `Tag`).
 type Tagging a = State String a
-
--- | Length of the representation of this chunk (second component of `Tag`).
-len :: Tag -> Additive Int
-len (Tuple _ l) = l
-
--- | Start of this chunk, relative to parent (first component of `Tag`).
-start :: Tag -> Additive Int
-start (Tuple i _) = i
-
--- | End of this chunk, relative to the start of the parent (sum of components).
-end :: Tag -> Additive Int
-end = start <> len
 
 tag :: Tagging (Untagged ATypeVF) -> Tuple String (Untagged ATypeVF)
 tag = swap <<< (runState <@> mempty)
@@ -656,25 +613,6 @@ simpleShowConst k v = simple (VF.inj k $ rewrap v) $ show $ unwrap v
 
 rewrap :: forall a b c. Const a b -> Const a c
 rewrap (Const a) = Const a
-
-showTagged1 :: Algebra ATypeVF (Tuple String (Untagged ATypeVF))
-showTagged1 = VF.match
-  { name: simpleShowConst _name
-  , var: simpleShowConst _var
-  , function: \(Pair l r) -> tag do
-      a <- recur l
-      literal " -> "
-      b <- recur r
-      pure (VF.inj _function (Pair a b))
-  , app: \(Pair l r) -> tag do
-      a <- recur l
-      literal " "
-      b <- recur r
-      pure (VF.inj _app (Pair a b))
-  --, row: \meh -> tag do
-      --literal "meh"
-      --pure (VF.inj (SProxy :: SProxy "row") meh)
-  }
 
 showTagged1P :: Maybe Annot -> Algebra ATypeVF (Tuple String (Untagged ATypeVF))
 showTagged1P p = VF.match
@@ -730,107 +668,76 @@ annotPrec = VF.match
   , var: VF.inj _var <<< rewrap
   , function: VF.inj _function <<< bimapPair (Tuple FnParen) (Tuple None)
   , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
-  }
-  where bimapPair f g (Pair a b) = Pair (f a) (g b)
+  } where bimapPair f g (Pair a b) = Pair (f a) (g b)
 
-showTagged :: ATypeV -> Tuple String (Untagged ATypeVF)
+showTagged :: forall t. Recursive t ATypeVF =>
+  t -> Tuple String (Untagged ATypeVF)
 showTagged = whileAnnotatingDown Nothing annotPrec showTagged1P
 
-showTagged' :: Maybe Annot -> ATypeV -> Tuple String (Untagged ATypeVF)
+showTagged' :: forall t. Recursive t ATypeVF =>
+  Maybe Annot -> t -> Tuple String (Untagged ATypeVF)
 showTagged' ann = whileAnnotatingDown ann annotPrec showTagged1P
+
+showAType :: forall t. Recursive t ATypeVF => t -> String
+showAType = showTagged >>> fst
+
+showAType' :: forall t. Recursive t ATypeVF => Maybe Annot -> t -> String
+showAType' ann = showTagged' ann >>> fst
 
 evalFrom :: Additive Int -> Tuple String (Untagged ATypeVF) -> Tuple String ATypeVC
 evalFrom st (Tuple s v) =
   Tuple s $ Tuple st (Additive (length s)) :< v
 
-showTaggedFrom :: Additive Int -> Maybe Annot -> ATypeV -> Tuple String ATypeVC
+showTaggedFrom :: forall t. Recursive t ATypeVF =>
+  Additive Int -> Maybe Annot -> t -> Tuple String ATypeVC
 showTaggedFrom i ann = showTagged' ann >>> evalFrom i
+
+modifyHead :: forall f a. (a -> a) -> Cofree f a -> Cofree f a
+modifyHead f = lift2 (:<) (f <<< head) tail
 
 patch ::
   ZipperVC -> ATypeV -> String ->
   (Additive Int -> Maybe Annot -> Tuple String ATypeVC)
 patch positioned replacement old i =
   let
-    caput = head positioned
-    st = start caput
-    sz = len caput
-    fn = end caput
+    Tuple offset size = head positioned
   in case tail positioned of
     Compose Nothing -> \ann ->
       let
-        before = take (unwrap (i <> st)) old
-        after  = drop (unwrap (i <> fn)) old
-        Tuple slice node = showTaggedFrom st ann replacement
+        before = take (unwrap (i <> offset)) old
+        after  = drop (unwrap (i <> offset <> size)) old
+        Tuple slice node = showTaggedFrom offset ann replacement
         spliced = before <> slice <> after
       in Tuple spliced node
     Compose (Just inside) -> const
       let
-        next ::
+        next da offset ann f =
+          let
+            Tuple new updated = patch da replacement old i $ Just ann
+            diff = Additive $ ((-) `on` length) new old
+          in Tuple new (Tuple offset (size <> diff) :< f diff updated)
+        handle ::
           forall sym bleh.
             IsSymbol sym =>
             RowCons sym (FProxy Pair) bleh ATypeVR =>
           SProxy sym -> Annot -> Annot ->
           DPair' ATypeVC ZipperVC -> Tuple String ATypeVC
-        next k ann _ (DPairL' da a) =
-          let
-            Tuple new updated = patch da replacement old i $ Just ann
-            diff = Additive $ ((-) `on` length) new old
-            -- The index of the second component may have changed relative to
-            -- the parent, if the length of the string changed.
-            rest = (head a <> Tuple diff mempty) :< tail a
-          in Tuple new (Tuple st (sz <> diff) :< VF.inj k (Pair updated rest))
-        next k _ ann (DPairR' a da) =
-          let
-            -- Accumulate this offset from the start.
-            Tuple new updated = patch da replacement old (i <> st) $ Just ann
-            diff = Additive $ ((-) `on` length) new old
-          in Tuple new (Tuple st (sz <> diff) :< VF.inj k (Pair a updated))
+        handle k ann _ (DPairL' da a) =
+          next da mempty ann
+            \diff updated ->
+              VF.inj k (Pair updated $ modifyHead (_ <> Tuple diff mempty) a)
+        handle k _ ann (DPairR' a da) =
+          next da offset ann
+            \_ updated ->
+              VF.inj k (Pair a updated)
       in inside # VF.match
-        { function: next _function FnParen None
-        , app: next _app FnParen FnAppParen
-        }
-
-showAType :: ATypeV -> String
-showAType one = para showInner one
-  where
-    showInner :: GAlgebra (Tuple ATypeV) ATypeVF String
-    showInner =
-      VF.match
-        { name: unwrap >>> show
-        , var: unwrap >>> show
-        , function:
-            \(Pair (Tuple a l) (Tuple b r)) ->
-              let left = wrapIf' l $ isTypeFunction a
-              in left <> " -> " <> r
-        , app:
-            \(Pair (Tuple f l) (Tuple a r)) ->
-              let
-                left = wrapIf' l (isTypeFunction f)
-                right = wrapIf' r (isTypeApp a || isTypeFunction a)
-              in left <> " " <> right
-        --, row:
-            --case _ of
-              --Product (Tuple m Nothing) ->
-                --"( " <> showFields m <> " )"
-              --Product (Tuple m (Just (Tuple _ a))) ->
-                --"( " <> showFields m <> " | " <> a <> " )"
+        { function: handle _function FnParen None
+        , app: handle _app FnParen FnAppParen
         }
 
 showFields :: forall a. StrMap (Tuple a String) -> String
 showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
   k <> " :: " <> v
-
-is ::
-  forall sym f bleh rows a.
-    IsSymbol sym =>
-    RowCons sym (FProxy f) bleh rows =>
-  SProxy sym -> VariantF rows a -> Boolean
-is k = VF.on k tt $ VF.default ff
-
-isTypeFunction :: ATypeV -> Boolean
-isTypeFunction = unroll >>> is _function
-isTypeApp :: ATypeV -> Boolean
-isTypeApp = unroll >>> is _app
 
 data AKindF a
   = KindName (Qualified Proper)
@@ -859,9 +766,7 @@ showDataTypeDecls :: DataTypeDecls -> String
 showDataTypeDecls = joinWith "\n" <<< Map.toAscUnfoldable >>> map
   \(Tuple name (DataTypeDef vs dt)) ->
     let
-      vars = case vs of
-        [] -> ""
-        _ -> " " <> joinWith " " (show <$> vs)
+      vars = joinWithIfNE " " show vs
     in show (declKeyword dt) <> " " <> show name <> vars <> " = " <> show dt
 
 type Modules = Map Module ModuleData
