@@ -20,7 +20,7 @@ import Data.HeytingAlgebra (ff, tt)
 import Data.Identity (Identity(..))
 import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid (class Monoid, mempty)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (unwrap)
@@ -33,7 +33,7 @@ import Data.StrMap (toUnfoldable) as StrMap
 import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replaceAll, take)
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
-import Matryoshka (Algebra, GAlgebra, cata, para)
+import Matryoshka (class Recursive, Algebra, GAlgebra, cata, para, project)
 import Unsafe.Coerce (unsafeCoerce)
 
 onlyType :: Proper -> Import
@@ -229,16 +229,16 @@ testTypeLSC = case testTypeLC of
   Tuple Nothing h -> cata simpleShow (forget h)
 
 testPatchSameR :: Tuple String ATypeVC
-testPatchSameR = uncurry patch (map forget testTypeLC') (fst testTypeC) mempty
+testPatchSameR = uncurry patch (map forget testTypeLC') (fst testTypeC) mempty Nothing
 
 testPatchSameL :: Tuple String ATypeVC
-testPatchSameL = uncurry patch (map forget $ extract1C' leftC (snd testTypeC)) (fst testTypeC) mempty
+testPatchSameL = uncurry patch (map forget $ extract1C' leftC (snd testTypeC)) (fst testTypeC) mempty Nothing
 
 testPatchExplodeR :: Tuple String ATypeVC
-testPatchExplodeR = patch (fst testTypeLC') otherTest (fst testTypeC) mempty
+testPatchExplodeR = patch (fst testTypeLC') otherTest (fst testTypeC) mempty Nothing
 
 testPatchExplodeL :: Tuple String ATypeVC
-testPatchExplodeL = patch (fst $ extract1C' leftC (snd testTypeC)) otherTest (fst testTypeC) mempty
+testPatchExplodeL = patch (fst $ extract1C' leftC (snd testTypeC)) otherTest (fst testTypeC) mempty Nothing
 
 forget :: forall f a. Functor f => Cofree f a -> Mu f
 forget v = tail v # map forget # roll
@@ -676,52 +676,118 @@ showTagged1 = VF.match
       --pure (VF.inj (SProxy :: SProxy "row") meh)
   }
 
+showTagged1P :: Maybe Annot -> Algebra ATypeVF (Tuple String (Untagged ATypeVF))
+showTagged1P p = VF.match
+  { name: simpleShowConst _name
+  , var: simpleShowConst _var
+  , function: \(Pair l r) -> wrapTagIf mayNeedFnParen do
+      a <- recur l
+      literal " -> "
+      b <- recur r
+      pure (VF.inj _function (Pair a b))
+  , app: \(Pair l r) -> wrapTagIf mayNeedAppParen do
+      a <- recur l
+      literal " "
+      b <- recur r
+      pure (VF.inj _app (Pair a b))
+  --, row: \meh -> tag do
+      --literal "meh"
+      --pure (VF.inj (SProxy :: SProxy "row") meh)
+  }
+  where
+    wrapTagIf pred v
+      | pred p    = tag $ literal "(" *> v <* literal ")"
+      | otherwise = tag v
+
+whileAnnotatingDown ::
+  forall t f a ann.
+    Recursive t f =>
+  Maybe ann -> (f t -> f (Tuple ann t)) ->
+  (Maybe ann -> Algebra f a) -> t -> a
+whileAnnotatingDown ann0 mkAnn f = f ann0 <<< go
+  where
+    go t = mkAnn (project t) <#>
+      \(Tuple ann t) -> f (Just ann) (go t)
+
+data Annot = FnParen | AppParen | FnAppParen | None
+derive instance eqAnnot :: Eq Annot
+needsFnParen :: Annot -> Boolean
+needsFnParen FnParen = true
+needsFnParen FnAppParen = true
+needsFnParen _ = false
+needsAppParen :: Annot -> Boolean
+needsAppParen AppParen = true
+needsAppParen FnAppParen = true
+needsAppParen _ = false
+mayNeedFnParen :: Maybe Annot -> Boolean
+mayNeedFnParen = maybe false needsFnParen
+mayNeedAppParen :: Maybe Annot -> Boolean
+mayNeedAppParen = maybe false needsAppParen
+-- instance heytingAlgebraAnnot :: HeytingAlgebra Annot
+annotPrec :: forall a. ATypeVF a -> ATypeVF (Tuple Annot a)
+annotPrec = VF.match
+  { name: VF.inj _name <<< rewrap
+  , var: VF.inj _var <<< rewrap
+  , function: VF.inj _function <<< bimapPair (Tuple FnParen) (Tuple None)
+  , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
+  }
+  where bimapPair f g (Pair a b) = Pair (f a) (g b)
+
 showTagged :: ATypeV -> Tuple String (Untagged ATypeVF)
-showTagged = cata showTagged1
+showTagged = whileAnnotatingDown Nothing annotPrec showTagged1P
+
+showTagged' :: Maybe Annot -> ATypeV -> Tuple String (Untagged ATypeVF)
+showTagged' ann = whileAnnotatingDown ann annotPrec showTagged1P
 
 evalFrom :: Additive Int -> Tuple String (Untagged ATypeVF) -> Tuple String ATypeVC
 evalFrom st (Tuple s v) =
   Tuple s $ Tuple st (Additive (length s)) :< v
 
-patch :: ZipperVC -> ATypeV -> (String -> Additive Int -> Tuple String ATypeVC)
-patch positioned replacement =
+showTaggedFrom :: Additive Int -> Maybe Annot -> ATypeV -> Tuple String ATypeVC
+showTaggedFrom i ann = showTagged' ann >>> evalFrom i
+
+patch ::
+  ZipperVC -> ATypeV -> String ->
+  (Additive Int -> Maybe Annot -> Tuple String ATypeVC)
+patch positioned replacement old i =
   let
     caput = head positioned
     st = start caput
     sz = len caput
     fn = end caput
   in case tail positioned of
-    Compose Nothing -> \old i ->
+    Compose Nothing -> \ann ->
       let
         before = take (unwrap (i <> st)) old
         after  = drop (unwrap (i <> fn)) old
-        Tuple slice node = evalFrom st $ showTagged replacement
+        Tuple slice node = showTaggedFrom st ann replacement
         spliced = before <> slice <> after
       in Tuple spliced node
-    Compose (Just inside) -> \old i ->
+    Compose (Just inside) -> const
       let
         next ::
           forall sym bleh.
             IsSymbol sym =>
             RowCons sym (FProxy Pair) bleh ATypeVR =>
-          SProxy sym -> DPair' ATypeVC ZipperVC -> Tuple String ATypeVC
-        next k (DPairL' da a) =
+          SProxy sym -> Annot -> Annot ->
+          DPair' ATypeVC ZipperVC -> Tuple String ATypeVC
+        next k ann _ (DPairL' da a) =
           let
-            Tuple new updated = patch da replacement old i
+            Tuple new updated = patch da replacement old i $ Just ann
             diff = Additive $ ((-) `on` length) new old
             -- The index of the second component may have changed relative to
             -- the parent, if the length of the string changed.
             rest = (head a <> Tuple diff mempty) :< tail a
           in Tuple new (Tuple st (sz <> diff) :< VF.inj k (Pair updated rest))
-        next k (DPairR' a da) =
+        next k _ ann (DPairR' a da) =
           let
             -- Accumulate this offset from the start.
-            Tuple new updated = patch da replacement old (i <> st)
+            Tuple new updated = patch da replacement old (i <> st) $ Just ann
             diff = Additive $ ((-) `on` length) new old
           in Tuple new (Tuple st (sz <> diff) :< VF.inj k (Pair a updated))
       in inside # VF.match
-        { function: next _function
-        , app: next _app
+        { function: next _function FnParen None
+        , app: next _app FnParen FnAppParen
         }
 
 showAType :: ATypeV -> String
