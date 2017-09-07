@@ -6,7 +6,7 @@ import Control.Apply (lift2)
 import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
 import Control.Monad.State (State, gets, modify, runState)
 import Data.Array (concatMap, last, uncons, unsnoc)
-import Data.Array (fromFoldable) as Array
+import Data.Array (fromFoldable, length, take, drop) as Array
 import Data.Bifunctor (lmap)
 import Data.Const (Const(..))
 import Data.Either (Either)
@@ -16,24 +16,23 @@ import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Functor.Variant as VF
-import Data.Identity (Identity(..))
 import Data.Map (Map)
 import Data.Map (fromFoldable, toAscUnfoldable, singleton, insert) as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid (class Monoid, mempty)
 import Data.Monoid.Additive (Additive(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (over2, unwrap)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Pair (Pair(..))
 import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.StrMap (StrMap)
-import Data.StrMap (toUnfoldable, insert) as StrMap
-import Data.String (Pattern(..), Replacement(..), drop, joinWith, length, replaceAll, take)
+import Data.StrMap (toUnfoldable) as StrMap
+import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll)
+import Data.String (drop, take, length) as String
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, snd, swap, uncurry)
 import Matryoshka (class Recursive, Algebra, cata, project)
-import Unsafe.Coerce (unsafeCoerce)
 
 onlyType :: Proper -> Import
 onlyType = Type <@> mempty
@@ -210,7 +209,7 @@ testTypeLS = case testTypeL of
 
 testTypeC :: Tuple String ATypeVC
 testTypeC = case showTagged testType of
-  Tuple s v -> Tuple s $ Tuple mempty (Additive (length s)) :< v
+  Tuple s v -> Tuple s $ Tuple mempty (length s) :< v
 
 testTypeCS :: String
 testTypeCS = cofrecurse (snd testTypeC)
@@ -514,68 +513,6 @@ downDPair' down (Pair l r) = Pair
   (DPairL' (down l) r)
   (DPairR' l (down r))
 
-foreign import data D :: Type -> Type
-toD :: forall f df. Diff f df => df -> D f
-toD = unsafeCoerce
-fromD :: forall f df. Diff f df => D f -> df
-fromD = unsafeCoerce
-foreign import data DF :: (Type -> Type) -> (Type -> Type)
-toDF :: forall f df x. Diff1 f df => df x -> DF f x
-toDF = unsafeCoerce
-fromDF :: forall f df x. Diff1 f df => DF f x -> df x
-fromDF = unsafeCoerce
-data Z x = Z (D x) x
-data ZF f x = ZF (DF f x) x
-class Diff a da | a -> da where
-  up :: Z a -> a
-class
-  ( Functor f
-  -- , Functor df
-  ) <= Diff1 (f :: Type -> Type) (df :: Type -> Type) | f -> df where
-    upF     :: forall x dx. Diff x dx => ZF f x  ->           f x
-    --aroundF :: forall x. ZF f x  ->  ZF f (ZF f x)
-    --downF   :: forall x.    f x  ->     f (ZF f x)
-instance diff1StrMap :: Diff1 StrMap DStrMap where
-  upF (ZF eh a) =
-    case fromDF eh of
-      DStrMap key da rest ->
-        StrMap.insert key (up (Z da a)) rest
-instance diff1Const :: Diff1 (Const a) (Const Void) where
-  upF (ZF eh _) = absurd (unwrap (fromDF eh))
-instance diff1Identity :: Diff1 Identity (Const Unit) where
-  upF (ZF _ x) = Identity x
-instance diff1Pair :: Diff1 Pair DPair where
-  upF (ZF eh a) =
-    case fromDF eh of
-      DPairR l da   -> Pair l (up (Z da a))
-      DPairL   da r -> Pair   (up (Z da a)) r
-{-
-instance diff1Compose ::
-  ( Diff1 f df
-  , Diff1 g fg
-  ) => Diff1 (Compose f g) (Product (Compose df g) dg) where
-    upF (ZF eh x) =
-      case fromDF eh of
-        (Product (Tuple (Compose dfg) dg)) ->
-          let
-            g = upF (ZF dg x)
-          in Compose $ ?finalize dg x
--}
-
-data DPair a = DPairL (D a) a | DPairR a (D a)
-instance functorDPair :: Functor D => Functor DPair where
-  map f (DPairL da a) = DPairL (map f da) (f a)
-  map f (DPairR a da) = DPairR (f a) (map f da)
-data DStrMap a = DStrMap String (D a) (StrMap a)
-data DMu f = DIn ((DF f) (Mu f)) (DMu f)
-type DATypeVR =
-  ( name     :: FProxy (Const Unit)
-  , var      :: FProxy (Const Unit)
-  , function :: FProxy (DPair)
-  , app      :: FProxy (DPair)
-  -- , row      :: FProxy (Product D DStrMap)
-  )
-
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
 -- |   2. the length of the string that represents this chunk
@@ -588,19 +525,61 @@ type Untagged f = f (Tagged f)
 -- | which also gives the index relative to the parent (see `Tag`).
 type Tagging a = State String a
 
-tag :: Tagging (Untagged ATypeVF) -> Tuple String (Untagged ATypeVF)
+-- | Class for monoids that support slicing operations, i.e. indexing a section
+-- | of itself.
+-- |
+-- | Laws (provisional):
+-- |   * Length is a monoid morphism:
+-- |     * `length mempty == mempty`
+-- |     * `length (a <> b) == length a <> length b`
+-- |   * `splice mempty (length s) r s == r`
+-- |   * `splice i mempty r s == s`
+-- |   * `splice i mempty r s == s`
+-- |   * `splice (length s) l r s == s`
+class Monoid m <= Spliceable m where
+  length :: m -> Additive Int
+  splice :: Additive Int -> Additive Int -> m -> m -> m
+
+instance spliceableString :: Spliceable String where
+  length = Additive <<< String.length
+  splice offset size replacement = do
+    before <- String.take (unwrap (offset))
+    after  <- String.drop (unwrap (offset <> size))
+    pure (before <> replacement <> after)
+
+instance spliceableArray :: Spliceable (Array a) where
+  length = Additive <<< Array.length
+  splice offset size replacement = do
+    before <- Array.take (unwrap (offset))
+    after  <- Array.drop (unwrap (offset <> size))
+    pure (before <> replacement <> after)
+
+take :: forall m. Spliceable m => Additive Int -> m -> m
+take = splice mempty <@> mempty
+drop :: forall m. Spliceable m => Additive Int -> m -> m
+drop i s = splice i (over2 Additive (-) (length s) i) mempty s
+
+tag ::
+  forall m.
+    Monoid m =>
+  State m (Untagged ATypeVF) ->
+  Tuple m (Untagged ATypeVF)
 tag = swap <<< (runState <@> mempty)
 
-recur :: Tuple String (Untagged ATypeVF) -> Tagging (Tagged ATypeVF)
+recur ::
+  forall m.
+    Spliceable m =>
+  Tuple m (Untagged ATypeVF) ->
+  State m (Tagged ATypeVF)
 recur (Tuple s r) = do
-  offset <- gets (Additive <<< length)
+  offset <- gets length
   literal s
-  pure $ Tuple offset (Additive (length s)) :< r
+  pure $ Tuple offset (length s) :< r
 
-literal :: String -> Tagging Unit
+literal :: forall m. Monoid m => m -> State m Unit
 literal s = modify (_ <> s)
 
-simple :: ATypeVF Void -> String -> Tuple String (Untagged ATypeVF)
+simple :: forall m. ATypeVF Void -> m -> Tuple m (Untagged ATypeVF)
 simple v s = Tuple s $ map absurd v
 
 simpleShowConst ::
@@ -678,15 +657,18 @@ showTagged' :: forall t. Recursive t ATypeVF =>
   Maybe Annot -> t -> Tuple String (Untagged ATypeVF)
 showTagged' ann = whileAnnotatingDown ann annotPrec showTagged1P
 
-showAType :: forall t. Recursive t ATypeVF => t -> String
+showAType :: forall t. Recursive t ATypeVF =>
+  t -> String
 showAType = showTagged >>> fst
 
-showAType' :: forall t. Recursive t ATypeVF => Maybe Annot -> t -> String
+showAType' :: forall t. Recursive t ATypeVF =>
+  Maybe Annot -> t -> String
 showAType' ann = showTagged' ann >>> fst
 
-evalFrom :: Additive Int -> Tuple String (Untagged ATypeVF) -> Tuple String ATypeVC
+evalFrom :: forall m. Spliceable m =>
+  Additive Int -> Tuple m (Untagged ATypeVF) -> Tuple m ATypeVC
 evalFrom st (Tuple s v) =
-  Tuple s $ Tuple st (Additive (length s)) :< v
+  Tuple s $ Tuple st (length s) :< v
 
 showTaggedFrom :: forall t. Recursive t ATypeVF =>
   Additive Int -> Maybe Annot -> t -> Tuple String ATypeVC
@@ -703,18 +685,15 @@ patch positioned replacement old i =
     Tuple offset size = head positioned
   in case tail positioned of
     Compose Nothing -> \ann ->
-      let
-        before = take (unwrap (i <> offset)) old
-        after  = drop (unwrap (i <> offset <> size)) old
-        Tuple slice node = showTaggedFrom offset ann replacement
-        spliced = before <> slice <> after
-      in Tuple spliced node
+      let start = i <> offset in
+      showTaggedFrom offset ann replacement # lmap
+        (splice start size <@> old)
     Compose (Just inside) -> const
       let
         next da offset ann f =
           let
             Tuple new updated = patch da replacement old i $ Just ann
-            diff = Additive $ ((-) `on` length) new old
+            diff = Additive $ ((-) `on` (length >>> unwrap)) new old
           in Tuple new (Tuple offset (size <> diff) :< f diff updated)
         handle ::
           forall sym bleh.
@@ -765,9 +744,8 @@ type DataTypeDecls = Map Proper DataTypeDef
 showDataTypeDecls :: DataTypeDecls -> String
 showDataTypeDecls = joinWith "\n" <<< Map.toAscUnfoldable >>> map
   \(Tuple name (DataTypeDef vs dt)) ->
-    let
-      vars = joinWithIfNE " " show vs
-    in show (declKeyword dt) <> " " <> show name <> vars <> " = " <> show dt
+    let vars = joinWithIfNE " " show vs in
+    show (declKeyword dt) <> " " <> show name <> vars <> " = " <> show dt
 
 type Modules = Map Module ModuleData
 type ModuleData =
