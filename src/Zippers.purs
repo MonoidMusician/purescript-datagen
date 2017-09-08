@@ -2,8 +2,12 @@ module Zippers where
 
 import Prelude
 
+import Control.Apply (lift2)
+import Control.Comonad (class Comonad, extract)
 import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
+import Control.Extend (class Extend)
 import Data.Bifunctor (lmap)
+import Data.Const (Const)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Variant (SProxy, VariantF)
@@ -11,9 +15,10 @@ import Data.Functor.Variant as VF
 import Data.Maybe (Maybe(..))
 import Data.Monoid.Additive (Additive)
 import Data.Pair (Pair(..))
+import Data.Pair as Pair
 import Data.StrMap (StrMap)
 import Data.Symbol (class IsSymbol)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), fst, snd)
 import Data.Variant.Internal (FProxy)
 import Matryoshka (Algebra)
 import Recursion (rewrap)
@@ -27,6 +32,12 @@ derive instance functorDPair' :: Functor (DPair' a)
 instance showDPair' :: (Show a, Show da) => Show (DPair' a da) where
   show (DPairL' da a) = "(DPairL' " <> show da <> " " <> show a <> ")"
   show (DPairR' a da) = "(DPairR' " <> show a <> " " <> show da <> ")"
+instance extendDPair' :: Extend (DPair' a) where
+  extend f p@(DPairL' da a) = DPairL' (f p) a
+  extend f p@(DPairR' a da) = DPairR' a (f p)
+instance comonadDPair' :: Comonad (DPair' a) where
+  extract (DPairL' da _) = da
+  extract (DPairR' _ da) = da
 data DStrMap' a da = DStrMap' String da (StrMap a)
 type DATypeVR' a da =
   ( name     :: Unit
@@ -142,6 +153,112 @@ downDPair' :: forall a da. (a -> da) -> Pair a -> Pair (DPair' a da)
 downDPair' down (Pair l r) = Pair
   (DPairL' (down l) r)
   (DPairR' l (down r))
+
+dis :: forall f d w a. Functor f => Comonad w => f (w (Tuple d a)) -> f (Tuple d (w a))
+dis = map (lift2 Tuple (fst <<< extract) (map snd))
+
+downZipperC :: Tuple ATypeVC ZipperVC -> Tuple Tag (ATypeVF (Tuple ATypeVC ZipperVC))
+downZipperC (Tuple a da) = Tuple (head a) $
+  ( VF.case_
+  # VF.on _name (VF.inj _name <<< rewrap)
+  # VF.on _var (VF.inj _var <<< rewrap)
+  # VF.on _function (mkZipperC _function (head a))
+  # VF.on _app (mkZipperC _app (head a))
+  ) (tail a)
+
+emptyZipperC :: forall f a. a -> Cofree (Compose Maybe f) a
+emptyZipperC = mkCofree <@> Compose Nothing
+
+emptyZipper :: forall f. Mu (Compose Maybe f)
+emptyZipper = roll $ Compose Nothing
+
+zLeftC :: Tuple Tag (ATypeVF (Tuple ATypeVC ZipperVC)) -> Tuple ATypeVC ZipperVC
+zLeftC (Tuple tag f) =
+  ( VF.case_
+  # handleConst _name
+  # handleConst _var
+  # VF.on _function Pair.fst
+  # VF.on _app Pair.fst
+  ) f
+  where
+    handleConst ::
+      forall sym a bleh r' r.
+        IsSymbol sym =>
+        RowCons sym (FProxy (Const a)) bleh ATypeVR =>
+        RowCons sym (FProxy (Const a)) r' r =>
+      SProxy sym ->
+      (VariantF r' (Tuple ATypeVC ZipperVC) -> Tuple ATypeVC ZipperVC) ->
+      VariantF r (Tuple ATypeVC ZipperVC) ->
+      Tuple ATypeVC ZipperVC
+    handleConst sym = VF.on sym (reconstitute <<< VF.inj sym <<< rewrap)
+    reconstitute = withEmptyZipper <<< mkCofree tag
+    withEmptyZipper = Tuple <@> emptyZipperC tag
+
+zLeft :: ATypeVF (Tuple ATypeV ZipperV) -> Tuple ATypeV ZipperV
+zLeft = VF.case_
+  # handleConst _name
+  # handleConst _var
+  # VF.on _function Pair.fst
+  # VF.on _app Pair.fst
+  where
+    handleConst ::
+      forall sym a bleh r' r.
+        IsSymbol sym =>
+        RowCons sym (FProxy (Const a)) bleh ATypeVR =>
+        RowCons sym (FProxy (Const a)) r' r =>
+      SProxy sym ->
+      (VariantF r' (Tuple ATypeV ZipperV) -> Tuple ATypeV ZipperV) ->
+      VariantF r (Tuple ATypeV ZipperV) ->
+      Tuple ATypeV ZipperV
+    handleConst sym = VF.on sym (reconstitute <<< VF.inj sym <<< rewrap)
+    reconstitute = withEmptyZipper <<< roll
+    withEmptyZipper = Tuple <@> emptyZipper
+
+downZipper :: Tuple ATypeV ZipperV -> ATypeVF (Tuple ATypeV ZipperV)
+downZipper (Tuple a da) =
+  ( VF.case_
+  # VF.on _name (VF.inj _name <<< rewrap)
+  # VF.on _var (VF.inj _var <<< rewrap)
+  # VF.on _function (mkZipper _function)
+  # VF.on _app (mkZipper _app)
+  ) (unroll a)
+
+addLayerC :: Tag -> ZipperVF ATypeVC ZipperVC -> ZipperVC
+addLayerC tag = mkCofree tag <<< Compose <<< Just
+
+addLayer :: ZipperVF ATypeV ZipperV -> ZipperV
+addLayer = roll <<< Compose <<< Just
+
+digC :: forall a f g. Cofree f a -> Tuple (Cofree f a) (Cofree (Compose Maybe g) a)
+digC v = Tuple v (head v :< Compose Nothing)
+
+dig :: forall f g. Mu f -> Tuple (Mu f) (Mu (Compose Maybe g))
+dig = Tuple <@> roll (Compose Nothing)
+
+mkZipperC ::
+  forall a da sym bleh meh.
+    IsSymbol sym =>
+    RowCons sym (FProxy Pair) bleh ATypeVR =>
+    RowCons sym (FProxy (DPair' ATypeVC)) meh (ZipperVR ATypeVC) =>
+  SProxy sym ->
+  Tag ->
+  Pair ATypeVC ->
+  ATypeVF (Tuple ATypeVC ZipperVC)
+mkZipperC sym tag p = VF.inj sym $
+  dis (downDPair' digC p) <#> map
+    (VF.inj sym >>> addLayerC tag)
+
+mkZipper ::
+  forall a da sym bleh meh.
+    IsSymbol sym =>
+    RowCons sym (FProxy Pair) bleh ATypeVR =>
+    RowCons sym (FProxy (DPair' ATypeV)) meh (ZipperVR ATypeV) =>
+  SProxy sym ->
+  Pair ATypeV ->
+  ATypeVF (Tuple ATypeV ZipperV)
+mkZipper sym p = VF.inj sym $
+  dis (downDPair' dig p) <#> map
+    (VF.inj sym >>> addLayer)
 
 simpleShowZ :: forall a. (a -> String) -> Algebra (ZipperVF a) String
 simpleShowZ inner = VF.match
