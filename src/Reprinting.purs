@@ -26,7 +26,7 @@ import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (modifyHead, rewrap, whileAnnotatingDown)
 import Types (ATypeV, ATypeVF, ATypeVR, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, _app, _function, _name, _var, declKeyword, showImportModules)
-import Zippers (DPair'(..), ZipperV2C)
+import Zippers (DPair(..), ZipperVC)
 
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
@@ -131,7 +131,7 @@ showTaggedFrom :: forall t. Recursive t ATypeVF =>
 showTaggedFrom i ann = showTagged' ann >>> evalFrom i
 
 patch ::
-  ZipperV2C -> ATypeV -> String ->
+  ZipperVC -> ATypeV -> String ->
   (Additive Int -> Maybe Annot -> Tuple String ATypeVC)
 patch positioned replacement old i =
   let
@@ -153,12 +153,12 @@ patch positioned replacement old i =
             IsSymbol sym =>
             RowCons sym (FProxy Pair) bleh ATypeVR =>
           SProxy sym -> Annot -> Annot ->
-          DPair' ATypeVC ZipperV2C -> Tuple String ATypeVC
-        handle k ann _ (DPairL' da a) =
+          DPair ATypeVC ZipperVC -> Tuple String ATypeVC
+        handle k ann _ (DPairL da a) =
           next da ann
             \diff updated ->
               VF.inj k (Pair updated $ modifyHead (_ <> Tuple diff mempty) a)
-        handle k _ ann (DPairR' a da) =
+        handle k _ ann (DPairR a da) =
           next da ann
             \_ updated ->
               VF.inj k (Pair a updated)

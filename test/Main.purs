@@ -16,7 +16,7 @@ import Printing (cofrecurse)
 import Recursion (forget)
 import Reprinting (ATypeVC, Tag, patch, showAType, showModuleData, showTagged)
 import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..), Import(..), ImportModule(..), Module(..), ModuleData, Op(..), Proper(..), Qualified(..))
-import Zippers (ZipperV2C, ZipperVF2, extract1, extract1C, extract1C', left, leftC, rightC, simpleShowZ1)
+import Zippers (ZipperVC, ZipperVF, extract1, extract1C, extract1C', left, leftC, rightC, simpleShowZ1)
 
 thisModule :: ModuleData
 thisModule =
@@ -79,7 +79,7 @@ testType = chainl aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Import
 otherTest :: ATypeV
 otherTest = chainr aTypeFunction (Unqualified <<< Proper <$> "Heus" :| ["Yo", "Hey"])
 
-testTypeL :: Tuple (Maybe (ZipperVF2 ATypeV Unit)) ATypeV
+testTypeL :: Tuple (Maybe (ZipperVF ATypeV Unit)) ATypeV
 testTypeL = extract1 left testType
 
 testTypeLS :: String
@@ -95,10 +95,10 @@ testTypeC = case showTagged testType of
 testTypeCS :: String
 testTypeCS = cofrecurse (snd testTypeC)
 
-testTypeLC :: Tuple (Maybe (ZipperVF2 ATypeVC Tag)) ATypeVC
+testTypeLC :: Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
 testTypeLC = extract1C rightC (snd testTypeC)
 
-testTypeLC' :: Tuple ZipperV2C ATypeVC
+testTypeLC' :: Tuple ZipperVC ATypeVC
 testTypeLC' = extract1C' rightC (snd testTypeC)
 
 testTypeLSC :: String
