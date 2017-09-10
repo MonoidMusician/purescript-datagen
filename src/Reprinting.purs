@@ -6,6 +6,7 @@ import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
 import Control.Comonad.Cofree (Cofree, head, tail, (:<))
 import Control.Monad.State (State, gets, modify, runState)
 import Data.Bifunctor (lmap)
+import Data.Bifunctor.Variant as VF2
 import Data.Const (Const)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
@@ -25,7 +26,7 @@ import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (modifyHead, rewrap, whileAnnotatingDown)
 import Types (ATypeV, ATypeVF, ATypeVR, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, _app, _function, _name, _var, declKeyword, showImportModules)
-import Zippers (DPair'(..), ZipperVC)
+import Zippers (DPair'(..), ZipperV2C)
 
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
@@ -130,7 +131,7 @@ showTaggedFrom :: forall t. Recursive t ATypeVF =>
 showTaggedFrom i ann = showTagged' ann >>> evalFrom i
 
 patch ::
-  ZipperVC -> ATypeV -> String ->
+  ZipperV2C -> ATypeV -> String ->
   (Additive Int -> Maybe Annot -> Tuple String ATypeVC)
 patch positioned replacement old i =
   let
@@ -142,9 +143,9 @@ patch positioned replacement old i =
         (splice start size <@> old)
     Compose (Just inside) -> const
       let
-        next da offset ann f =
+        next da ann f =
           let
-            Tuple new updated = patch da replacement old i $ Just ann
+            Tuple new updated = patch da replacement old (i <> offset) $ Just ann
             diff = Additive $ ((-) `on` (length >>> unwrap)) new old
           in Tuple new (Tuple offset (size <> diff) :< f diff updated)
         handle ::
@@ -152,16 +153,16 @@ patch positioned replacement old i =
             IsSymbol sym =>
             RowCons sym (FProxy Pair) bleh ATypeVR =>
           SProxy sym -> Annot -> Annot ->
-          DPair' ATypeVC ZipperVC -> Tuple String ATypeVC
+          DPair' ATypeVC ZipperV2C -> Tuple String ATypeVC
         handle k ann _ (DPairL' da a) =
-          next da mempty ann
+          next da ann
             \diff updated ->
               VF.inj k (Pair updated $ modifyHead (_ <> Tuple diff mempty) a)
         handle k _ ann (DPairR' a da) =
-          next da offset ann
+          next da ann
             \_ updated ->
               VF.inj k (Pair a updated)
-      in inside # VF.match
+      in inside # VF2.match
         { function: handle _function FnParen None
         , app: handle _app FnParen FnAppParen
         }
