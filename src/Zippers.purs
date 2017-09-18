@@ -6,57 +6,184 @@ import Control.Apply (lift2)
 import Control.Comonad (class Comonad, extract)
 import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
 import Control.Extend (class Extend)
-import Data.Bifunctor (class Bifunctor, lmap, rmap)
+import Data.Bifoldable (class Bifoldable, bifoldlDefault, bifoldrDefault)
+import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
 import Data.Bifunctor.Variant (F2Proxy, VariantF2)
 import Data.Bifunctor.Variant as VF2
-import Data.Const (Const)
+import Data.Bitraversable (class Bitraversable, bisequenceDefault)
+import Data.Const (Const(..))
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
-import Data.Functor.Variant (SProxy, VariantF)
+import Data.Functor.Variant (VariantF)
 import Data.Functor.Variant as VF
+import Data.FunctorWithIndex (class FunctorWithIndex)
 import Data.Maybe (Maybe(..))
 import Data.Monoid.Additive (Additive)
+import Data.Newtype (class Newtype)
 import Data.Pair (Pair(..))
 import Data.Pair as Pair
 import Data.StrMap (StrMap)
-import Data.Symbol (class IsSymbol)
+import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
-import Data.Variant.Internal (FProxy)
+import Data.Variant.Internal (FProxy, RLProxy(..))
 import Matryoshka (Algebra)
 import Recursion (rewrap)
+import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
 import Types (ATypeV, ATypeVF, ATypeVR, Ident, Proper, Qualified, _app, _function, _name, _var)
+import Unsafe.Coerce (unsafeCoerce)
 
 type Tag = Tuple (Additive Int) (Additive Int)
 type ATypeVC = Cofree ATypeVF Tag
 
-data DPair a da = DPairL da a | DPairR a da
-derive instance functorDPair :: Functor (DPair a)
-instance bifunctorDPair :: Bifunctor DPair where
+class (Functor f, Functor f') <= Diff1 f f' | f -> f' where
+  upF      ::  forall x. ZF f x  ->           f x
+  downF    ::  forall x.    f x  ->     f (ZF f x)
+  aroundF  ::  forall x. ZF f x  ->  ZF f (ZF f x)
+
+foreign import data ZF :: (Type -> Type) -> Type -> Type
+toZF :: forall f f' x. Diff1 f f' => Tuple (f' x) x -> ZF f x
+toZF = unsafeCoerce
+fromZF :: forall f f' x. Diff1 f f' => ZF f x -> Tuple (f' x) x
+fromZF = unsafeCoerce
+
+instance functorZF :: Diff1 f f' => Functor (ZF f) where
+  map f = fromZF >>> case _ of
+    Tuple f'x x -> toZF $ Tuple
+      (map f f'x)
+      (f x)
+
+ixPair :: forall a b. (Boolean -> a -> b) -> Pair a -> Pair b
+ixPair f (Pair l r) = Pair (f false l) (f true r)
+
+ixDPair :: forall a. DPair a -> Boolean
+ixDPair (DPairL' _) = false
+ixDPair (DPairR' _) = true
+
+data DPair a = DPairL' a | DPairR' a
+derive instance functorDPair :: Functor DPair
+data DPair2 a da = DPairL da a | DPairR a da
+derive instance eqDPair :: (Eq a, Eq da) => Eq (DPair2 a da)
+derive instance ordDPair :: (Ord a, Ord da) => Ord (DPair2 a da)
+derive instance functorDPair2 :: Functor (DPair2 a)
+instance bifunctorDPair :: Bifunctor DPair2 where
   bimap f g = case _ of
     DPairL da a -> DPairL (g da) (f a)
     DPairR a da -> DPairR (f a) (g da)
-instance showDPair :: (Show a, Show da) => Show (DPair a da) where
+instance bifoldableDPair :: Bifoldable DPair2 where
+  bifoldMap f g = case _ of
+    DPairL da a -> g da <> f a
+    DPairR a da -> f a <> g da
+  bifoldr f g = bifoldrDefault f g
+  bifoldl f g = bifoldlDefault f g
+instance bitraversableDPair :: Bitraversable DPair2 where
+  bitraverse f g = case _ of
+    DPairL da a -> DPairL <$> g da <*> f a
+    DPairR a da -> DPairR <$> f a <*> g da
+  bisequence = bisequenceDefault
+instance showDPair :: (Show a, Show da) => Show (DPair2 a da) where
   show (DPairL da a) = "(DPairL " <> show da <> " " <> show a <> ")"
   show (DPairR a da) = "(DPairR " <> show a <> " " <> show da <> ")"
-instance extendDPair :: Extend (DPair a) where
+instance extendDPair :: Extend (DPair2 a) where
   extend f p@(DPairL da a) = DPairL (f p) a
   extend f p@(DPairR a da) = DPairR a (f p)
-instance comonadDPair :: Comonad (DPair a) where
+instance comonadDPair :: Comonad (DPair2 a) where
   extract (DPairL da _) = da
   extract (DPairR _ da) = da
-data DStrMap a da = DStrMap String da (StrMap a)
-type DATypeVR a da =
-  ( name     :: Unit
-  , var      :: Unit
-  , function :: DPair a da
-  , app      :: DPair a da
-  -- , row      :: Tuple (DStrMap' a da) da
-  )
-data DMu f df = DIn' (df (Mu f) (DMu f df)) (DMu f df)
+instance derivativeofPair_isDPair :: Diff1 Pair DPair where
+  downF (Pair l r) = Pair
+    (toZF $ Tuple (DPairL' r) l)
+    (toZF $ Tuple (DPairR' l) r)
+  upF z = case fromZF z of
+    Tuple (DPairL' l) r -> Pair l r
+    Tuple (DPairR' r) l -> Pair l r
+  aroundF z = case fromZF z of
+    Tuple (DPairL' l) r -> toZF $ flip Tuple z $
+      DPairL' z
+    Tuple (DPairR' r) l -> toZF $ flip Tuple z $
+      DPairR' z
+
+instance derivativeofConst_isVoid :: Diff1 (Const a) (Const Void) where
+  downF (Const a) = Const a
+  upF z = case fromZF z of
+    Tuple (Const v) o -> absurd v
+  aroundF z = case fromZF z of
+    Tuple (Const v) o -> absurd v
+
+
+instance deriveofVariant_isVariantOfDerivatives ::
+  ( RowToList r rl
+  , DiffVariantF r r' rl rl'
+  , ListToRow rl' r'
+  ) => Diff1 (VariantF r) (VariantF r') where
+  downF = unsafeCoerce (downV (RLProxy :: RLProxy rl))
+  upF = unsafeCoerce (upV (RLProxy :: RLProxy rl))
+  aroundF = unsafeCoerce (aroundV (RLProxy :: RLProxy rl))
+
+type VF r' a = Tuple (VariantF r' a) a
+
+class DiffVariantF (r :: # Type) (r' :: # Type) (rl :: RowList) (rl' :: RowList) | rl -> r r' rl' where
+  upV :: forall a. RLProxy rl -> VF r' a -> VariantF r a
+  downV :: forall a. RLProxy rl -> VariantF r a -> VariantF r (VF r' a)
+  aroundV :: forall a. RLProxy rl -> VF r' a -> VF r' (VF r' a)
+
+instance diffVNil :: DiffVariantF () () Nil Nil where
+  upV _ = fst >>> VF.case_
+  downV _ = VF.case_
+  aroundV _ = fst >>> VF.case_
+
+instance diffVCons ::
+  ( IsSymbol sym
+  , Functor f
+  , Diff1 f f'
+  , RowCons sym (FProxy f) n r
+  , ListToRow rl n
+  , DiffVariantF n n' rl rl'
+  , RowToList n' rl'
+  , RowCons sym (FProxy f') n' r'
+  , Union n m r
+  , Union n' m' r'
+  ) => DiffVariantF r r' (Cons sym (FProxy f) rl) (Cons sym (FProxy f') rl') where
+    upV _ (Tuple v x) = handleThis handleOther v
+      where
+        sym = SProxy :: SProxy sym
+        handleOther v' = VF.expand $
+          upV (RLProxy :: RLProxy rl) (Tuple v' x)
+        handleThis = VF.on sym \f' -> VF.inj sym $
+          upF (toZF (Tuple f' x) :: ZF f _)
+    downV _ = handleThis handleOther
+      where
+        sym = SProxy :: SProxy sym
+        handleOther v' = VF.expand $ lmap VF.expand <$>
+          downV (RLProxy :: RLProxy rl) v'
+        handleThis = VF.on sym \f -> VF.inj sym $
+          map (lmap (VF.inj sym) <<< fromZF) $ downF f
+    aroundV _ (Tuple v x) = handleThis handleOther v
+      where
+        sym = SProxy :: SProxy sym
+        handleOther v' = bimap
+          (VF.expand >>> map (lmap VF.expand))
+          (lmap VF.expand)
+          $ aroundV (RLProxy :: RLProxy rl) (Tuple v' x)
+        inj :: forall a. f' a -> VariantF r' a
+        inj = VF.inj sym
+        handleThis = VF.on sym \f' ->
+          lmap (map (fromZF >>> lmap inj) >>> inj) $
+          map (lmap inj <<< fromZF) $
+          fromZF $ aroundF (toZF (Tuple f' x) :: ZF f _)
+
+data DStrMap a da = DStrMap (StrMap a) String da (StrMap a)
+data DMu f df = DHere | DIn (df (Mu f) (DMu f df)) (DMu f df)
+
+newtype Couple f a = Couple (Pair (f a))
+derive instance newtypeCouple :: Newtype (Couple f a) _
+instance functorCouple :: Functor f => Functor (Couple f) where
+  map f (Couple p) = Couple (map (map f) p)
+instance functorWithIndex :: Functor f => FunctorWithIndex Boolean (Couple f) where
+  mapWithIndex f (Couple (Pair l r)) = Couple (Pair (f false <$> l) (f true <$> r))
 
 type ZipperVR =
-  ( function :: F2Proxy DPair
-  , app :: F2Proxy DPair
+  ( function :: F2Proxy DPair2
+  , app :: F2Proxy DPair2
   )
 type ZipperVF = VariantF2 ZipperVR
 type ZipperVF' a = Compose Maybe (ZipperVF a)
@@ -74,8 +201,8 @@ rePair' ::
   forall a da sym bleh meh.
     IsSymbol sym =>
     RowCons sym (FProxy Pair) bleh ATypeVR =>
-    RowCons sym (F2Proxy DPair) meh ZipperVR =>
-  SProxy sym -> Pair (DPair a da) -> ATypeVF (ZipperVF a da)
+    RowCons sym (F2Proxy DPair2) meh ZipperVR =>
+  SProxy sym -> Pair (DPair2 a da) -> ATypeVF (ZipperVF a da)
 rePair' sym = VF.inj sym <<< map (VF2.inj sym)
 
 {-
@@ -107,7 +234,7 @@ downZipper1 v =
   ) (unroll v)
 
 extract1 ::
-  (Pair ATypeV -> Tuple (DPair ATypeV Unit) ATypeV) ->
+  (Pair ATypeV -> Tuple (DPair2 ATypeV Unit) ATypeV) ->
   ATypeV -> Tuple (Maybe (ZipperVF ATypeV Unit)) ATypeV
 extract1 choose this =
   ( VF.default (Tuple Nothing this)
@@ -116,12 +243,12 @@ extract1 choose this =
   ) (unroll this)
 
 extract1' ::
-  (Pair ATypeV -> Tuple (DPair ATypeV Unit) ATypeV) ->
+  (Pair ATypeV -> Tuple (DPair2 ATypeV Unit) ATypeV) ->
   ATypeV -> Tuple ZipperV ATypeV
 extract1' choose = extract1 choose >>> lmap unroll1
 
 extract1C ::
-  (Pair ATypeVC -> Tuple (DPair ATypeVC Tag) ATypeVC) ->
+  (Pair ATypeVC -> Tuple (DPair2 ATypeVC Tag) ATypeVC) ->
   ATypeVC -> Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
 extract1C choose this =
   ( VF.default (Tuple Nothing this)
@@ -130,21 +257,21 @@ extract1C choose this =
   ) (tail this)
 
 extract1C' ::
-  (Pair ATypeVC -> Tuple (DPair ATypeVC Tag) ATypeVC) ->
+  (Pair ATypeVC -> Tuple (DPair2 ATypeVC Tag) ATypeVC) ->
   ATypeVC -> Tuple ZipperVC ATypeVC
 extract1C' choose v =
   extract1C choose v # lmap (unroll1C (head v))
 
-left :: forall a. Pair a -> Tuple (DPair a Unit) a
+left :: forall a. Pair a -> Tuple (DPair2 a Unit) a
 left (Pair l r) = Tuple (DPairL unit r) l
 
-right :: forall a. Pair a -> Tuple (DPair a Unit) a
+right :: forall a. Pair a -> Tuple (DPair2 a Unit) a
 right (Pair l r) = Tuple (DPairR l unit) r
 
-leftC :: Pair ATypeVC -> Tuple (DPair ATypeVC Tag) ATypeVC
+leftC :: Pair ATypeVC -> Tuple (DPair2 ATypeVC Tag) ATypeVC
 leftC (Pair l r) = Tuple (DPairL (head l) r) l
 
-rightC :: Pair ATypeVC -> Tuple (DPair ATypeVC Tag) ATypeVC
+rightC :: Pair ATypeVC -> Tuple (DPair2 ATypeVC Tag) ATypeVC
 rightC (Pair l r) = Tuple (DPairR l (head r)) r
 
 unroll1 :: Maybe (ZipperVF ATypeV Unit) -> ZipperV
@@ -153,10 +280,15 @@ unroll1 = roll <<< Compose <<< map (rmap (const (roll (Compose Nothing))))
 unroll1C :: Tag -> Maybe (ZipperVF ATypeVC Tag) -> ZipperVC
 unroll1C h v = h :< Compose (rmap (mkCofree <@> Compose Nothing) <$> v)
 
-downDPair :: forall a da. (a -> da) -> Pair a -> Pair (DPair a da)
+downDPair :: forall a da. (a -> da) -> Pair a -> Pair (DPair2 a da)
 downDPair down (Pair l r) = Pair
   (DPairL (down l) r)
   (DPairR l (down r))
+
+upDPair :: forall da a. (da -> a) -> DPair2 a da -> Pair a
+upDPair up = case _ of
+  DPairL da a -> Pair (up da) a
+  DPairR a da -> Pair a (up da)
 
 dis :: forall f d w a. Functor f => Comonad w => f (w (Tuple d a)) -> f (Tuple d (w a))
 dis = map (lift2 Tuple (fst <<< extract) (map snd))
@@ -314,7 +446,7 @@ mkZipperC ::
   forall a da sym bleh meh.
     IsSymbol sym =>
     RowCons sym (FProxy Pair) bleh ATypeVR =>
-    RowCons sym (F2Proxy DPair) meh ZipperVR =>
+    RowCons sym (F2Proxy DPair2) meh ZipperVR =>
   SProxy sym ->
   Tag ->
   Pair ATypeVC ->
@@ -324,10 +456,10 @@ mkZipperC sym tag p = VF.inj sym $
     (VF2.inj sym >>> addLayerC tag)
 
 mkZipper ::
-  forall a da sym bleh meh.
+  forall sym bleh meh.
     IsSymbol sym =>
     RowCons sym (FProxy Pair) bleh ATypeVR =>
-    RowCons sym (F2Proxy DPair) meh ZipperVR =>
+    RowCons sym (F2Proxy DPair2) meh ZipperVR =>
   SProxy sym ->
   Pair ATypeV ->
   ATypeVF (Tuple ATypeV ZipperV)
@@ -342,7 +474,7 @@ simpleShowZ inner = VF2.match
   --, row: const "()"
   }
   where
-    showBranch :: String -> DPair a String -> String
+    showBranch :: String -> DPair2 a String -> String
     showBranch s (DPairL da a) = "{" <> da <> "}" <> s <> inner a
     showBranch s (DPairR a da) = inner a <> s <> "{" <> da <> "}"
 

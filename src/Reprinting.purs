@@ -3,14 +3,17 @@ module Reprinting where
 import Prelude
 
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
+import Control.Comonad (class Comonad)
 import Control.Comonad.Cofree (Cofree, head, tail, (:<))
-import Control.Monad.State (State, gets, modify, runState)
+import Control.Monad.State (State, evalState, get, gets, modify, runState)
 import Data.Bifunctor (lmap)
 import Data.Bifunctor.Variant as VF2
+import Data.Bitraversable (class Bitraversable, bitraverse)
 import Data.Const (Const)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Variant as VF
+import Data.Identity (Identity(..))
 import Data.Map (toAscUnfoldable) as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
@@ -26,7 +29,7 @@ import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (modifyHead, rewrap, whileAnnotatingDown)
 import Types (ATypeV, ATypeVF, ATypeVR, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, _app, _function, _name, _var, declKeyword, showImportModules)
-import Zippers (DPair(..), ZipperVC)
+import Zippers (DPair2(..), ZipperVC, dis, upDPair)
 
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
@@ -41,6 +44,10 @@ type Untagged f = f (Tagged f)
 type Tagging a = State String a
 
 type ATypeVC = Tagged ATypeVF
+
+newtype Reprinter f f' m ann = Reprinter
+  { print :: ann -> Algebra f (Tuple m (Untagged f))
+  }
 
 tag ::
   forall m.
@@ -132,40 +139,70 @@ showTaggedFrom i ann = showTagged' ann >>> evalFrom i
 
 patch ::
   ZipperVC -> ATypeV -> String ->
-  (Additive Int -> Maybe Annot -> Tuple String ATypeVC)
-patch positioned replacement old i =
-  let
-    Tuple offset size = head positioned
-  in case tail positioned of
-    Compose Nothing -> \ann ->
-      let start = i <> offset in
-      showTaggedFrom offset ann replacement # lmap
-        (splice start size <@> old)
-    Compose (Just inside) -> const
-      let
-        next da ann f =
+  Tuple String ATypeVC
+patch p replacement old = patchInner p mempty Nothing
+  where
+    patchInner positioned i =
+      let Tuple offset size = head positioned
+      in case tail positioned of
+        Compose Nothing -> \ann ->
+          let start = i <> offset in
+          showTaggedFrom offset ann replacement # lmap
+            (splice start size <@> old)
+        Compose (Just inside) -> const
           let
-            Tuple new updated = patch da replacement old (i <> offset) $ Just ann
-            diff = Additive $ ((-) `on` (length >>> unwrap)) new old
-          in Tuple new (Tuple offset (size <> diff) :< f diff updated)
-        handle ::
-          forall sym bleh.
-            IsSymbol sym =>
-            RowCons sym (FProxy Pair) bleh ATypeVR =>
-          SProxy sym -> Annot -> Annot ->
-          DPair ATypeVC ZipperVC -> Tuple String ATypeVC
-        handle k ann _ (DPairL da a) =
-          next da ann
-            \diff updated ->
-              VF.inj k (Pair updated $ modifyHead (_ <> Tuple diff mempty) a)
-        handle k _ ann (DPairR a da) =
-          next da ann
-            \_ updated ->
-              VF.inj k (Pair a updated)
-      in inside # VF2.match
-        { function: handle _function FnParen None
-        , app: handle _app FnParen FnAppParen
-        }
+            handle ::
+              (Pair ~> ATypeVF) ->
+              DPair2 ATypeVC ZipperVC -> Annot ->
+              Tuple String ATypeVC
+            handle inj dpair ann =
+              let
+                Tuple new pair = upDPair id <$>
+                  patching1 (patcher ann) old dpair
+                caput = Tuple offset (size <> delta old new)
+              in Tuple new $ caput :< inj pair
+            patcher ann da =
+              patchInner da (i <> offset) $ Just ann
+            isLeft = case _ of
+              DPairL _ _ -> true
+              DPairR _ _ -> false
+            getAnn l r = case _ of
+              DPairL _ _ -> l
+              DPairR _ _ -> r
+            ann = VF2.match
+              { function:
+                  isLeft >>> if _ then FnParen else None
+              , app:
+                  isLeft >>> if _ then FnParen else FnAppParen
+              }
+          in inside # VF2.match
+            { function: handle (VF.inj _function) <*> getAnn FnParen None
+            , app: handle (VF.inj _app) <*> getAnn FnParen FnAppParen
+            }
+
+delta :: forall m. Spliceable m =>
+  m -> m -> Additive Int
+delta old new = Additive $ ((-) `on` (length >>> unwrap)) new old
+
+patching1 ::
+  forall r f df a da.
+    Bitraversable df =>
+    Comonad (df (Cofree f Tag)) =>
+    Spliceable r =>
+  (da -> Tuple r a) -> r -> df (Cofree f Tag) da ->
+  Tuple r (df (Cofree f Tag) a)
+patching1 f old = disI <<< run <<< bitraverse term hole
+  where
+    term t = get <#> \diff ->
+      modifyHead (_ <> Tuple diff mempty) t
+    hole h = do
+      let
+        Tuple new n = f h
+        diff = delta old new
+      modify (_ <> diff)
+      pure (Tuple new n)
+    disI = unwrap <<< dis <<< Identity
+    run = evalState <@> mempty
 
 showDataType :: DataType -> String
 showDataType (TypeAlias t) = showAType t

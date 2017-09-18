@@ -108,16 +108,16 @@ testTypeLSC = case testTypeLC of
   Tuple Nothing h -> showAType (forget h)
 
 testPatchSameR :: Tuple String ATypeVC
-testPatchSameR = uncurry patch (map forget testTypeLC') (fst testTypeC) mempty Nothing
+testPatchSameR = uncurry patch (map forget testTypeLC') (fst testTypeC)
 
 testPatchSameL :: Tuple String ATypeVC
-testPatchSameL = uncurry patch (map forget $ extract1C' leftC (snd testTypeC)) (fst testTypeC) mempty Nothing
+testPatchSameL = uncurry patch (map forget $ extract1C' leftC (snd testTypeC)) (fst testTypeC)
 
 testPatchExplodeR :: Tuple String ATypeVC
-testPatchExplodeR = patch (fst testTypeLC') otherTest (fst testTypeC) mempty Nothing
+testPatchExplodeR = patch (fst testTypeLC') otherTest (fst testTypeC)
 
 testPatchExplodeL :: Tuple String ATypeVC
-testPatchExplodeL = patch (fst $ extract1C' leftC (snd testTypeC)) otherTest (fst testTypeC) mempty Nothing
+testPatchExplodeL = patch (fst $ extract1C' leftC (snd testTypeC)) otherTest (fst testTypeC)
 
 main :: Eff ( console :: CONSOLE ) Unit
 main = do
