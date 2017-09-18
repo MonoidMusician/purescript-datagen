@@ -5,6 +5,7 @@ import Prelude
 import Control.Apply (lift2)
 import Control.Comonad (class Comonad, extract)
 import Control.Comonad.Cofree (Cofree, head, mkCofree, tail, (:<))
+import Control.Comonad.Env (EnvT(..))
 import Control.Extend (class Extend)
 import Data.Bifoldable (class Bifoldable, bifoldlDefault, bifoldrDefault)
 import Data.Bifunctor (class Bifunctor, bimap, lmap, rmap)
@@ -12,22 +13,24 @@ import Data.Bifunctor.Variant (F2Proxy, VariantF2)
 import Data.Bifunctor.Variant as VF2
 import Data.Bitraversable (class Bitraversable, bisequenceDefault)
 import Data.Const (Const(..))
+import Data.Either (Either(..), either)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Variant (VariantF)
 import Data.Functor.Variant as VF
-import Data.FunctorWithIndex (class FunctorWithIndex)
-import Data.Maybe (Maybe(..))
+import Data.Lazy (Lazy, defer, force)
+import Data.Lens (Lens', lens)
+import Data.List (List(Nil), (:))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid.Additive (Additive)
-import Data.Newtype (class Newtype)
+import Data.Newtype (unwrap)
 import Data.Pair (Pair(..))
 import Data.Pair as Pair
-import Data.StrMap (StrMap)
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
-import Data.Variant.Internal (FProxy, RLProxy(..))
-import Matryoshka (Algebra)
-import Recursion (rewrap)
+import Data.Variant.Internal (FProxy(..), RLProxy(..))
+import Matryoshka (class Corecursive, class Recursive, Algebra, cata, embed, project)
+import Recursion (forget, rewrap)
 import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
 import Types (ATypeV, ATypeVF, ATypeVR, Ident, Proper, Qualified, _app, _function, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
@@ -36,21 +39,68 @@ type Tag = Tuple (Additive Int) (Additive Int)
 type ATypeVC = Cofree ATypeVF Tag
 
 class (Functor f, Functor f') <= Diff1 f f' | f -> f' where
-  upF      ::  forall x. ZF f x  ->           f x
-  downF    ::  forall x.    f x  ->     f (ZF f x)
-  aroundF  ::  forall x. ZF f x  ->  ZF f (ZF f x)
+  upF      ::  forall x. ZF f x  ->                 f x
+  downF    ::  forall x.    f x  ->     f (Lazy (ZF f x))
+  aroundF  ::  forall x. ZF f x  ->  ZF f       (ZF f x)
 
-foreign import data ZF :: (Type -> Type) -> Type -> Type
+instance derivativeEnvT :: (Functor f, Diff1 f f') => Diff1 (EnvT e f) (EnvT e f') where
+  downF (EnvT (Tuple e f)) = EnvT $ Tuple e $ downF f <#> map
+    (injZF (EnvT <<< Tuple e))
+  upF (dex :<-: x) =
+    case fromDF dex of
+      EnvT (Tuple e dfx) ->
+        EnvT $ Tuple e $ upF (toDF' (FProxy :: FProxy f) dfx :<-: x)
+  aroundF (dex :<-: x) =
+    case fromDF dex of
+      EnvT (Tuple e dfx) ->
+        injZF2 (EnvT <<< Tuple e) $
+        aroundF (toDF' (FProxy :: FProxy f) dfx :<-: x)
+
+foreign import data DF :: (Type -> Type) -> Type -> Type
+toDF' :: forall f f' x. Diff1 f f' => FProxy f -> f' x -> DF f x
+toDF' _ = toDF
+toDF :: forall f f' x. Diff1 f f' => f' x -> DF f x
+toDF = unsafeCoerce
+fromDF :: forall f f' x. Diff1 f f' => DF f x -> f' x
+fromDF = unsafeCoerce
+reDF :: forall f g f' x. Diff1 f f' => Diff1 g f' => DF f x -> DF g x
+reDF = fromDF >>> toDF
+injDF :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
+  (forall x. x ~> g x) -> DF f x -> DF (g f) x
+injDF g = fromDF >>> g >>> toDF
+
+instance functorDF :: Diff1 f f' => Functor (DF f) where
+  map f = fromDF >>> map f >>> toDF
+
+data ZF f x = ZF (DF f x) x
+infix 1 ZF as :<-:
 toZF :: forall f f' x. Diff1 f f' => Tuple (f' x) x -> ZF f x
-toZF = unsafeCoerce
+toZF (Tuple f'x x) = toDF f'x :<-: x
 fromZF :: forall f f' x. Diff1 f f' => ZF f x -> Tuple (f' x) x
-fromZF = unsafeCoerce
+fromZF (f'x :<-: x) = Tuple (fromDF f'x) x
+reZF :: forall f g f' x. Diff1 f f' => Diff1 g f' => ZF f x -> ZF g x
+reZF (f'x :<-: x) = reDF f'x :<-: x
+injZF :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
+  (forall x. x ~> g x) -> ZF f x -> ZF (g f) x
+injZF g (f'x :<-: x) = injDF g f'x :<-: x
+injZF2 :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
+  (forall x. x ~> g x) -> ZF f (ZF f x) -> ZF (g f) (ZF (g f) x)
+injZF2 g (f'x :<-: x) = injDF g f'x <#> injZF g :<-: injZF g x
+
+_contextF :: forall f x. Lens' (ZF f x) (DF f x)
+_contextF = lens (\(c :<-: _) -> c)
+  \(_ :<-: f) c -> c :<-: f
+
+_focusF :: forall f x. Lens' (ZF f x) x
+_focusF = lens (\(_ :<-: f) -> f)
+  \(c :<-: _) f -> c :<-: f
 
 instance functorZF :: Diff1 f f' => Functor (ZF f) where
-  map f = fromZF >>> case _ of
-    Tuple f'x x -> toZF $ Tuple
-      (map f f'x)
-      (f x)
+  map f (f'x :<-: x) = map f f'x :<-: f x
+instance extendZF :: Diff1 f f' => Extend (ZF f) where
+  extend f = map f <<< aroundF
+instance comonadZF :: Diff1 f f' => Comonad (ZF f) where
+  extract (_ :<-: x) = x
 
 ixPair :: forall a b. (Boolean -> a -> b) -> Pair a -> Pair b
 ixPair f (Pair l r) = Pair (f false l) (f true r)
@@ -91,8 +141,8 @@ instance comonadDPair :: Comonad (DPair2 a) where
   extract (DPairR _ da) = da
 instance derivativeofPair_isDPair :: Diff1 Pair DPair where
   downF (Pair l r) = Pair
-    (toZF $ Tuple (DPairL' r) l)
-    (toZF $ Tuple (DPairR' l) r)
+    (defer \_ -> toZF $ Tuple (DPairL' r) l)
+    (defer \_ -> toZF $ Tuple (DPairR' l) r)
   upF z = case fromZF z of
     Tuple (DPairL' l) r -> Pair l r
     Tuple (DPairR' r) l -> Pair l r
@@ -109,7 +159,6 @@ instance derivativeofConst_isVoid :: Diff1 (Const a) (Const Void) where
   aroundF z = case fromZF z of
     Tuple (Const v) o -> absurd v
 
-
 instance deriveofVariant_isVariantOfDerivatives ::
   ( RowToList r rl
   , DiffVariantF r r' rl rl'
@@ -123,7 +172,7 @@ type VF r' a = Tuple (VariantF r' a) a
 
 class DiffVariantF (r :: # Type) (r' :: # Type) (rl :: RowList) (rl' :: RowList) | rl -> r r' rl' where
   upV :: forall a. RLProxy rl -> VF r' a -> VariantF r a
-  downV :: forall a. RLProxy rl -> VariantF r a -> VariantF r (VF r' a)
+  downV :: forall a. RLProxy rl -> VariantF r a -> VariantF r (Lazy (VF r' a))
   aroundV :: forall a. RLProxy rl -> VF r' a -> VF r' (VF r' a)
 
 instance diffVNil :: DiffVariantF () () Nil Nil where
@@ -148,15 +197,15 @@ instance diffVCons ::
         sym = SProxy :: SProxy sym
         handleOther v' = VF.expand $
           upV (RLProxy :: RLProxy rl) (Tuple v' x)
-        handleThis = VF.on sym \f' -> VF.inj sym $
-          upF (toZF (Tuple f' x) :: ZF f _)
+        handleThis = VF.on sym \f' -> VF.inj sym $ upF $
+          toDF' (FProxy :: FProxy f) f' :<-: x
     downV _ = handleThis handleOther
       where
         sym = SProxy :: SProxy sym
-        handleOther v' = VF.expand $ lmap VF.expand <$>
+        handleOther v' = VF.expand $ map (lmap VF.expand) <$>
           downV (RLProxy :: RLProxy rl) v'
         handleThis = VF.on sym \f -> VF.inj sym $
-          map (lmap (VF.inj sym) <<< fromZF) $ downF f
+          (map (lmap (VF.inj sym) <<< fromZF) <$> downF f)
     aroundV _ (Tuple v x) = handleThis handleOther v
       where
         sym = SProxy :: SProxy sym
@@ -168,18 +217,59 @@ instance diffVCons ::
         inj = VF.inj sym
         handleThis = VF.on sym \f' ->
           lmap (map (fromZF >>> lmap inj) >>> inj) $
-          map (lmap inj <<< fromZF) $
-          fromZF $ aroundF (toZF (Tuple f' x) :: ZF f _)
+          map (lmap inj <<< fromZF) $ fromZF $
+          aroundF $ toDF' (FProxy :: FProxy f) f' :<-: x
 
-data DStrMap a da = DStrMap (StrMap a) String da (StrMap a)
-data DMu f df = DHere | DIn (df (Mu f) (DMu f df)) (DMu f df)
+data ZRec t f = ZRec (List (DF f t)) (f t)
+infix 1 ZRec as :<<~:
 
-newtype Couple f a = Couple (Pair (f a))
-derive instance newtypeCouple :: Newtype (Couple f a) _
-instance functorCouple :: Functor f => Functor (Couple f) where
-  map f (Couple p) = Couple (map (map f) p)
-instance functorWithIndex :: Functor f => FunctorWithIndex Boolean (Couple f) where
-  mapWithIndex f (Couple (Pair l r)) = Couple (Pair (f false <$> l) (f true <$> r))
+downRec ::
+  forall t f f'.
+    Recursive t f => Corecursive t f =>
+    Functor f => Diff1 f f' =>
+  ZRec t f -> f (Lazy (ZRec t f))
+downRec (context :<<~: focus) = downF focus <#> map
+  case _ of
+    cx :<-: fc ->
+      cx : context :<<~: project fc
+
+upRec ::
+  forall t f f'.
+    Recursive t f => Corecursive t f =>
+    Functor f => Diff1 f f' =>
+  ZRec t f -> Either t (ZRec t f)
+upRec (Nil :<<~: focus) = Left (embed focus)
+upRec (cx : context :<<~: focus) = Right $
+  context :<<~: (upF (cx :<-: embed focus))
+
+tipRec ::
+  forall t f f'.
+    Recursive t f => Corecursive t f =>
+    Functor f => Diff1 f f' =>
+  t -> ZRec t f
+tipRec = ZRec Nil <<< project
+
+topRec ::
+  forall t f f'.
+    Recursive t f => Corecursive t f =>
+    Functor f => Diff1 f f' =>
+  ZRec t f -> t
+topRec z = upRec z # either id topRec
+
+downIntoRec ::
+  forall t f f'.
+    Recursive t f => Corecursive t f =>
+    Functor f => Diff1 f f' =>
+  (f ~> Maybe) -> ZRec t f -> ZRec t f
+downIntoRec f z = maybe z force (f (downRec z))
+
+_contextRec :: forall t f. Lens' (ZRec t f) (List (DF f t))
+_contextRec = lens (\(c :<<~: _) -> c)
+  \(_ :<<~: f) c -> c :<<~: f
+
+_focusRec :: forall t f. Lens' (ZRec t f) (f t)
+_focusRec = lens (\(_ :<<~: f) -> f)
+  \(c :<<~: _) f -> c :<<~: f
 
 type ZipperVR =
   ( function :: F2Proxy DPair2
@@ -189,6 +279,7 @@ type ZipperVF = VariantF2 ZipperVR
 type ZipperVF' a = Compose Maybe (ZipperVF a)
 type ZipperV = Mu (ZipperVF' ATypeV)
 type ZipperVC = Cofree (ZipperVF' ATypeVC) Tag
+type ZipperVRec = ZRec ATypeVC ATypeVF
 
 downZipperVF :: forall a da. (a -> da) -> ATypeVF a -> ATypeVF (ZipperVF a da)
 downZipperVF down = VF.case_
@@ -443,7 +534,7 @@ dig :: forall f g. Mu f -> Tuple (Mu f) (Mu (Compose Maybe g))
 dig = Tuple <@> roll (Compose Nothing)
 
 mkZipperC ::
-  forall a da sym bleh meh.
+  forall sym bleh meh.
     IsSymbol sym =>
     RowCons sym (FProxy Pair) bleh ATypeVR =>
     RowCons sym (F2Proxy DPair2) meh ZipperVR =>
@@ -480,3 +571,29 @@ simpleShowZ inner = VF2.match
 
 simpleShowZ1 :: forall a s. Show s => (a -> String) -> ZipperVF a s -> String
 simpleShowZ1 inner v = simpleShowZ inner (rmap show v)
+
+simpleShowZRec :: ZipperVRec -> String
+simpleShowZRec (context :<<~: focus) = go context cx
+  where
+    meh :: Algebra ATypeVF String
+    meh = VF.match
+      { name: unwrap >>> show
+      , var: unwrap >>> show
+      , function: \(Pair l r) ->
+          "(" <> l <> ") -> (" <> r <> ")"
+      , app: \(Pair l r) ->
+          "(" <> l <> ") (" <> r <> ")"
+      }
+    meh2 = forget >>> cata meh
+    meh3 = map forget >>> embed >>> cata meh
+    cx = meh3 focus
+    go Nil s = s
+    go (h : r) s = go r $ VF.match
+      { function: showBranch " -> " s
+      , app: showBranch " " s
+      , name: unwrap >>> absurd
+      , var: unwrap >>> absurd
+      } $ fromDF h
+    showBranch :: String -> String -> DPair ATypeVC -> String
+    showBranch sep s (DPairL' a) = "{" <> meh2 a <> "}" <> sep <> s
+    showBranch sep s (DPairR' a) = s <> sep <> "{" <> meh2 a <> "}"

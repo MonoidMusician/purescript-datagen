@@ -137,3 +137,4 @@ main = do
   log "---------- "
   log testTypeLSC
   log (showModuleData thisModule)
+  -- log (simpleShowZRec (downF))

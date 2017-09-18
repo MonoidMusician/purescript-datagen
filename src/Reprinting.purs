@@ -153,15 +153,15 @@ patch p replacement old = patchInner p mempty Nothing
           let
             handle ::
               (Pair ~> ATypeVF) ->
-              DPair2 ATypeVC ZipperVC -> Annot ->
+              DPair2 ATypeVC ZipperVC ->
               Tuple String ATypeVC
-            handle inj dpair ann =
+            handle inj dpair =
               let
                 Tuple new pair = upDPair id <$>
-                  patching1 (patcher ann) old dpair
+                  patching1 patcher old dpair
                 caput = Tuple offset (size <> delta old new)
               in Tuple new $ caput :< inj pair
-            patcher ann da =
+            patcher da =
               patchInner da (i <> offset) $ Just ann
             isLeft = case _ of
               DPairL _ _ -> true
@@ -174,10 +174,10 @@ patch p replacement old = patchInner p mempty Nothing
                   isLeft >>> if _ then FnParen else None
               , app:
                   isLeft >>> if _ then FnParen else FnAppParen
-              }
+              } $ inside
           in inside # VF2.match
-            { function: handle (VF.inj _function) <*> getAnn FnParen None
-            , app: handle (VF.inj _app) <*> getAnn FnParen FnAppParen
+            { function: handle (VF.inj _function)
+            , app: handle (VF.inj _app)
             }
 
 delta :: forall m. Spliceable m =>
