@@ -30,7 +30,7 @@ import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Variant.Internal (FProxy(..), RLProxy(..))
 import Matryoshka (class Corecursive, class Recursive, Algebra, cata, embed, project)
-import Recursion (forget, rewrap)
+import Recursion (rewrap)
 import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
 import Types (ATypeV, ATypeVF, ATypeVR, Ident, Proper, Qualified, _app, _function, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
@@ -144,12 +144,12 @@ instance derivativeofPair_isDPair :: Diff1 Pair DPair where
     (defer \_ -> toZF $ Tuple (DPairL' r) l)
     (defer \_ -> toZF $ Tuple (DPairR' l) r)
   upF z = case fromZF z of
-    Tuple (DPairL' l) r -> Pair l r
-    Tuple (DPairR' r) l -> Pair l r
+    Tuple (DPairL' r) l -> Pair l r
+    Tuple (DPairR' l) r -> Pair l r
   aroundF z = case fromZF z of
-    Tuple (DPairL' l) r -> toZF $ flip Tuple z $
+    Tuple (DPairL' r) l -> toZF $ flip Tuple z $
       DPairL' z
-    Tuple (DPairR' r) l -> toZF $ flip Tuple z $
+    Tuple (DPairR' l) r -> toZF $ flip Tuple z $
       DPairR' z
 
 instance derivativeofConst_isVoid :: Diff1 (Const a) (Const Void) where
@@ -497,29 +497,21 @@ handleATypeVF methods = VF.case_
   # VF.on _function methods.function
   # VF.on _app methods.app
 
-{-
-meh :: forall a r.
-  { "Const" ::
-      forall sym b bleh.
-        IsSymbol sym =>
-        RowCons sym (FProxy (Const b)) bleh ATypeVR =>
-      SProxy sym -> Const b a -> r
+handleATypeVFReinjector :: forall a r.
+  { "Const" :: forall b.
+      (Const b ~> ATypeVF) ->
+      (DF (Const b) ~> DF ATypeVF) ->
+      Const b a -> r
   , "Pair" ::
-      forall a' sym bleh meh.
-        IsSymbol sym =>
-        RowCons sym (FProxy Pair) bleh ATypeVR =>
-        RowCons sym (FProxy (DPair a')) meh (ZipperVR a') =>
-      SProxy sym -> Pair a -> r
+      (Pair ~> ATypeVF) ->
+      (DF Pair ~> DF ATypeVF) ->
+      Pair a -> r
   } -> ATypeVF a -> r
-meh methods = VF.case_
-  # VF.on _name (onName _name)
-  # VF.on _var (methods."Const" _var)
-  # VF.on _function (methods."Pair" _function)
-  # VF.on _app (methods."Pair" _app)
-  where
-    onName :: forall b. SProxy "name" -> Const b a -> r
-    onName = methods."Const"
--}
+handleATypeVFReinjector methods = VF.case_
+  # VF.on _name (methods."Const" (VF.inj _name) (fromDF >>> unwrap >>> absurd))
+  # VF.on _var (methods."Const" (VF.inj _var) (fromDF >>> unwrap >>> absurd))
+  # VF.on _function (methods."Pair" (VF.inj _function) (fromDF >>> VF.inj _function >>> toDF))
+  # VF.on _app (methods."Pair" (VF.inj _app) (fromDF >>> VF.inj _app >>> toDF))
 
 addLayerC :: Tag -> ZipperVF ATypeVC ZipperVC -> ZipperVC
 addLayerC tag = mkCofree tag <<< Compose <<< Just
@@ -572,11 +564,11 @@ simpleShowZ inner = VF2.match
 simpleShowZ1 :: forall a s. Show s => (a -> String) -> ZipperVF a s -> String
 simpleShowZ1 inner v = simpleShowZ inner (rmap show v)
 
-simpleShowZRec :: ZipperVRec -> String
+simpleShowZRec :: ZRec ATypeV ATypeVF -> String
 simpleShowZRec (context :<<~: focus) = go context cx
   where
-    meh :: Algebra ATypeVF String
-    meh = VF.match
+    show1 :: Algebra ATypeVF String
+    show1 = VF.match
       { name: unwrap >>> show
       , var: unwrap >>> show
       , function: \(Pair l r) ->
@@ -584,9 +576,8 @@ simpleShowZRec (context :<<~: focus) = go context cx
       , app: \(Pair l r) ->
           "(" <> l <> ") (" <> r <> ")"
       }
-    meh2 = forget >>> cata meh
-    meh3 = map forget >>> embed >>> cata meh
-    cx = meh3 focus
+    showAll = cata show1
+    cx = showAll $ embed focus
     go Nil s = s
     go (h : r) s = go r $ VF.match
       { function: showBranch " -> " s
@@ -594,6 +585,6 @@ simpleShowZRec (context :<<~: focus) = go context cx
       , name: unwrap >>> absurd
       , var: unwrap >>> absurd
       } $ fromDF h
-    showBranch :: String -> String -> DPair ATypeVC -> String
-    showBranch sep s (DPairL' a) = "{" <> meh2 a <> "}" <> sep <> s
-    showBranch sep s (DPairR' a) = s <> sep <> "{" <> meh2 a <> "}"
+    showBranch :: String -> String -> DPair ATypeV -> String
+    showBranch sep s (DPairL' a) = "{" <> s <> "}" <> sep <> showAll a
+    showBranch sep s (DPairR' a) = showAll a <> sep <> "{" <> s <> "}"

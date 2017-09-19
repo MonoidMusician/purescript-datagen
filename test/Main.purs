@@ -5,18 +5,20 @@ import Control.Comonad.Cofree (head, (:<))
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE, log, logShow)
 import Data.Bitraversable (bitraverse)
+import Data.Functor.Variant (match)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
 import Data.NonEmpty ((:|))
+import Data.Pair (Pair(..))
 import Data.Spliceable (length)
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
-import Prelude (Unit, append, discard, flip, map, pure, void, ($), (<#>), (<$>), (<<<), (<>), (>>>))
+import Prelude (Unit, append, const, discard, flip, map, pure, void, ($), (<#>), (<$>), (<<<), (<>), (>>>))
 import Printing (cofrecurse)
 import Recursion (forget)
 import Reprinting (ATypeVC, Tag, patch, showAType, showModuleData, showTagged)
 import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..), Import(..), ImportModule(..), Module(..), ModuleData, Op(..), Proper(..), Qualified(..))
-import Zippers (ZipperVC, ZipperVF, extract1, extract1C, extract1C', left, leftC, rightC, simpleShowZ1)
+import Zippers (ZipperVC, ZipperVF, downIntoRec, extract1, extract1C, extract1C', left, leftC, rightC, simpleShowZ1, simpleShowZRec, tipRec)
 
 thisModule :: ModuleData
 thisModule =
@@ -137,4 +139,12 @@ main = do
   log "---------- "
   log testTypeLSC
   log (showModuleData thisModule)
-  -- log (simpleShowZRec (downF))
+  let
+    leftIsh = match
+      { function: \(Pair l _) -> Just l
+      , app: \(Pair l _) -> Just l
+      , name: const Nothing
+      , var: const Nothing
+      }
+    leftIng = downIntoRec leftIsh
+  log $ simpleShowZRec $ leftIng $ leftIng $ tipRec testType
