@@ -8,7 +8,23 @@ import Data.Const (Const(..))
 import Data.Functor.Mu (Mu, roll)
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
-import Matryoshka (class Recursive, Algebra, project)
+import Matryoshka (class Corecursive, class Recursive, Algebra, embed, project)
+import Type.Proxy (Proxy)
+import Unsafe.Coerce (unsafeCoerce)
+
+foreign import data Alg :: Type -> (Type -> Type)
+toAlg' :: forall t f. Recursive t f => Corecursive t f => Proxy t -> f ~> Alg t
+toAlg' _ = toAlg
+toAlg :: forall t f. Recursive t f => Corecursive t f => f ~> Alg t
+toAlg = unsafeCoerce
+fromAlg :: forall t f. Recursive t f => Corecursive t f => Alg t ~> f
+fromAlg = unsafeCoerce
+
+projectAlg :: forall t f. Recursive t f => Corecursive t f => t -> Alg t t
+projectAlg = project >>> toAlg
+
+embedAlg :: forall t f. Recursive t f => Corecursive t f => Alg t t -> t
+embedAlg = fromAlg >>> embed
 
 forget :: forall f a. Functor f => Cofree f a -> Mu f
 forget v = tail v # map forget # roll

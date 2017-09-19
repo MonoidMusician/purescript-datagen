@@ -30,7 +30,7 @@ import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Variant.Internal (FProxy(..), RLProxy(..))
 import Matryoshka (class Corecursive, class Recursive, Algebra, cata, embed, project)
-import Recursion (rewrap)
+import Recursion (Alg, rewrap)
 import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
 import Types (ATypeV, ATypeVF, ATypeVR, Ident, Proper, Qualified, _app, _function, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
@@ -220,54 +220,71 @@ instance diffVCons ::
           map (lmap inj <<< fromZF) $ fromZF $
           aroundF $ toDF' (FProxy :: FProxy f) f' :<-: x
 
-data ZRec t f = ZRec (List (DF f t)) (f t)
+type ParentCtx t = DF (Alg t) t
+data ZRec t = ZRec (List (ParentCtx t)) t
 infix 1 ZRec as :<<~:
+
+toParentCtx ::
+  forall t f f'.
+    Recursive t f =>
+    Corecursive t f =>
+    Diff1 f f' =>
+  DF f ~> DF (Alg t)
+toParentCtx = unsafeCoerce
+
+fromParentCtx ::
+  forall t f f'.
+    Recursive t f =>
+    Corecursive t f =>
+    Diff1 f f' =>
+  DF (Alg t) ~> DF f
+fromParentCtx = unsafeCoerce
 
 downRec ::
   forall t f f'.
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
-  ZRec t f -> f (Lazy (ZRec t f))
-downRec (context :<<~: focus) = downF focus <#> map
+  ZRec t -> f (Lazy (ZRec t))
+downRec (context :<<~: focus) = downF (project focus) <#> map
   case _ of
     cx :<-: fc ->
-      cx : context :<<~: project fc
+      toParentCtx cx : context :<<~: fc
 
 upRec ::
   forall t f f'.
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
-  ZRec t f -> Either t (ZRec t f)
-upRec (Nil :<<~: focus) = Left (embed focus)
+  ZRec t -> Either t (ZRec t)
+upRec (Nil :<<~: focus) = Left focus
 upRec (cx : context :<<~: focus) = Right $
-  context :<<~: (upF (cx :<-: embed focus))
+  context :<<~: embed (upF (fromParentCtx cx :<-: focus))
 
 tipRec ::
   forall t f f'.
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
-  t -> ZRec t f
-tipRec = ZRec Nil <<< project
+  t -> ZRec t
+tipRec = ZRec Nil
 
 topRec ::
   forall t f f'.
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
-  ZRec t f -> t
+  ZRec t -> t
 topRec z = upRec z # either id topRec
 
 downIntoRec ::
   forall t f f'.
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
-  (f ~> Maybe) -> ZRec t f -> ZRec t f
+  (f ~> Maybe) -> ZRec t -> ZRec t
 downIntoRec f z = maybe z force (f (downRec z))
 
-_contextRec :: forall t f. Lens' (ZRec t f) (List (DF f t))
+_contextRec :: forall t. Lens' (ZRec t) (List (DF (Alg t) t))
 _contextRec = lens (\(c :<<~: _) -> c)
   \(_ :<<~: f) c -> c :<<~: f
 
-_focusRec :: forall t f. Lens' (ZRec t f) (f t)
+_focusRec :: forall t. Lens' (ZRec t) t
 _focusRec = lens (\(_ :<<~: f) -> f)
   \(c :<<~: _) f -> c :<<~: f
 
@@ -279,7 +296,7 @@ type ZipperVF = VariantF2 ZipperVR
 type ZipperVF' a = Compose Maybe (ZipperVF a)
 type ZipperV = Mu (ZipperVF' ATypeV)
 type ZipperVC = Cofree (ZipperVF' ATypeVC) Tag
-type ZipperVRec = ZRec ATypeVC ATypeVF
+type ZipperVRec = ZRec ATypeVC
 
 downZipperVF :: forall a da. (a -> da) -> ATypeVF a -> ATypeVF (ZipperVF a da)
 downZipperVF down = VF.case_
@@ -564,7 +581,7 @@ simpleShowZ inner = VF2.match
 simpleShowZ1 :: forall a s. Show s => (a -> String) -> ZipperVF a s -> String
 simpleShowZ1 inner v = simpleShowZ inner (rmap show v)
 
-simpleShowZRec :: ZRec ATypeV ATypeVF -> String
+simpleShowZRec :: ZRec ATypeV -> String
 simpleShowZRec (context :<<~: focus) = go context cx
   where
     show1 :: Algebra ATypeVF String
@@ -577,14 +594,14 @@ simpleShowZRec (context :<<~: focus) = go context cx
           "(" <> l <> ") (" <> r <> ")"
       }
     showAll = cata show1
-    cx = showAll $ embed focus
+    cx = showAll focus
     go Nil s = s
     go (h : r) s = go r $ VF.match
       { function: showBranch " -> " s
       , app: showBranch " " s
       , name: unwrap >>> absurd
       , var: unwrap >>> absurd
-      } $ fromDF h
+      } $ fromDF $ fromParentCtx h
     showBranch :: String -> String -> DPair ATypeV -> String
     showBranch sep s (DPairL' a) = "{" <> s <> "}" <> sep <> showAll a
     showBranch sep s (DPairR' a) = showAll a <> sep <> "{" <> s <> "}"
