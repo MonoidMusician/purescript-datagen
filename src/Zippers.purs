@@ -6,9 +6,7 @@ import Control.Comonad (class Comonad)
 import Control.Comonad.Cofree (Cofree)
 import Control.Comonad.Env (EnvT(..))
 import Control.Extend (class Extend)
-import Data.Bifoldable (class Bifoldable, bifoldlDefault, bifoldrDefault)
-import Data.Bifunctor (class Bifunctor, bimap, lmap)
-import Data.Bitraversable (class Bitraversable, bisequenceDefault)
+import Data.Bifunctor (bimap, lmap)
 import Data.Const (Const(..))
 import Data.Either (Either(..), either)
 import Data.Functor.Variant (VariantF)
@@ -105,34 +103,6 @@ ixDPair (DPairR' _) = true
 
 data DPair a = DPairL' a | DPairR' a
 derive instance functorDPair :: Functor DPair
-data DPair2 a da = DPairL da a | DPairR a da
-derive instance eqDPair :: (Eq a, Eq da) => Eq (DPair2 a da)
-derive instance ordDPair :: (Ord a, Ord da) => Ord (DPair2 a da)
-derive instance functorDPair2 :: Functor (DPair2 a)
-instance bifunctorDPair :: Bifunctor DPair2 where
-  bimap f g = case _ of
-    DPairL da a -> DPairL (g da) (f a)
-    DPairR a da -> DPairR (f a) (g da)
-instance bifoldableDPair :: Bifoldable DPair2 where
-  bifoldMap f g = case _ of
-    DPairL da a -> g da <> f a
-    DPairR a da -> f a <> g da
-  bifoldr f g = bifoldrDefault f g
-  bifoldl f g = bifoldlDefault f g
-instance bitraversableDPair :: Bitraversable DPair2 where
-  bitraverse f g = case _ of
-    DPairL da a -> DPairL <$> g da <*> f a
-    DPairR a da -> DPairR <$> f a <*> g da
-  bisequence = bisequenceDefault
-instance showDPair :: (Show a, Show da) => Show (DPair2 a da) where
-  show (DPairL da a) = "(DPairL " <> show da <> " " <> show a <> ")"
-  show (DPairR a da) = "(DPairR " <> show a <> " " <> show da <> ")"
-instance extendDPair :: Extend (DPair2 a) where
-  extend f p@(DPairL da a) = DPairL (f p) a
-  extend f p@(DPairR a da) = DPairR a (f p)
-instance comonadDPair :: Comonad (DPair2 a) where
-  extract (DPairL da _) = da
-  extract (DPairR _ da) = da
 instance derivativeofPair_isDPair :: Diff1 Pair DPair where
   downF (Pair l r) = Pair
     (defer \_ -> toZF $ Tuple (DPairL' r) l)
