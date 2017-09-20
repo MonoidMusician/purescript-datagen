@@ -167,18 +167,18 @@ patch (Tuple old (p :<<~: plug)) replacement = Tuple new (p' :<<~: focus)
     adj = append d -- technically this would prepend, but Abelian so it works out
     adjIdx = lmap adj
     adjLen = rmap adj
-    updateOtherChildTag priorIdxOfUpdated tag =
-      if fst tag > priorIdxOfUpdated
-        then adjIdx tag
-        else tag
+    updateOtherChildTag priorIdxOfUpdated t =
+      if fst t > priorIdxOfUpdated
+        then adjIdx t
+        else t
     adjustAll :: Additive Int -> ParentCtxs ATypeVC -> ParentCtxs ATypeVC
     adjustAll _ Nil = Nil
     adjustAll childIdx (cf : cfs) =
       case extractParentCtx cf of
-        Tuple tag@(Tuple idx _) cx ->
+        Tuple t@(Tuple idx _) cx ->
           let
             children = modifyHead (updateOtherChildTag childIdx) <$> cx
-            adjusted = EnvT $ Tuple (adjLen tag) children
+            adjusted = EnvT $ Tuple (adjLen t) children
           in toParentCtx (toDF adjusted) : adjustAll idx cfs
     p' = adjustAll (fst pos) p
     realPos = fst pos <> List.foldMap
