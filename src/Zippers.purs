@@ -221,7 +221,8 @@ instance diffVCons ::
           aroundF $ toDF' (FProxy :: FProxy f) f' :<-: x
 
 type ParentCtx t = DF (Alg t) t
-data ZRec t = ZRec (List (ParentCtx t)) t
+type ParentCtxs t = List (ParentCtx t)
+data ZRec t = ZRec (ParentCtxs t) t
 infix 1 ZRec as :<<~:
 
 toParentCtx ::

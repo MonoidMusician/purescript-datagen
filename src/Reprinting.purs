@@ -3,33 +3,31 @@ module Reprinting where
 import Prelude
 
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
-import Control.Comonad (class Comonad)
-import Control.Comonad.Cofree (Cofree, head, tail, (:<))
-import Control.Monad.State (State, evalState, get, gets, modify, runState)
-import Data.Bifunctor (lmap)
-import Data.Bifunctor.Variant as VF2
-import Data.Bitraversable (class Bitraversable, bitraverse)
+import Control.Comonad.Cofree (Cofree, head, (:<))
+import Control.Comonad.Env (EnvT(..))
+import Control.Monad.State (State, gets, modify, runState)
+import Data.Bifunctor (lmap, rmap)
 import Data.Const (Const)
 import Data.Function (on)
-import Data.Functor.Compose (Compose(..))
 import Data.Functor.Variant as VF
-import Data.Identity (Identity(..))
+import Data.List (List(..), (:))
+import Data.List as List
 import Data.Map (toAscUnfoldable) as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
 import Data.Monoid.Additive (Additive(..))
-import Data.Newtype (unwrap)
+import Data.Newtype (un, unwrap)
 import Data.Pair (Pair(..))
 import Data.Spliceable (class Spliceable, length, splice)
 import Data.String (joinWith)
 import Data.Symbol (class IsSymbol, SProxy)
-import Data.Tuple (Tuple(..), fst, swap)
+import Data.Tuple (Tuple(..), fst, snd, swap)
 import Data.Variant.Internal (FProxy)
 import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
-import Recursion (modifyHead, rewrap, whileAnnotatingDown)
+import Recursion (Alg, modifyHead, rewrap, whileAnnotatingDown)
 import Types (ATypeV, ATypeVF, ATypeVR, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, _app, _function, _name, _var, declKeyword, showImportModules)
-import Zippers (DPair2(..), ZipperVC, dis, upDPair)
+import Zippers (class Diff1, DF, DPair(DPairR', DPairL'), ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
 
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
@@ -138,71 +136,57 @@ showTaggedFrom :: forall t. Recursive t ATypeVF =>
 showTaggedFrom i ann = showTagged' ann >>> evalFrom i
 
 patch ::
-  ZipperVC -> ATypeV -> String ->
-  Tuple String ATypeVC
-patch p replacement old = patchInner p mempty Nothing
+  Tuple String (ZRec ATypeVC) -> ATypeV ->
+  Tuple String (ZRec ATypeVC)
+patch (Tuple old (p :<<~: plug)) replacement = Tuple new (p' :<<~: focus)
   where
-    patchInner positioned i =
-      let Tuple offset size = head positioned
-      in case tail positioned of
-        Compose Nothing -> \ann ->
-          let start = i <> offset in
-          showTaggedFrom offset ann replacement # lmap
-            (splice start size <@> old)
-        Compose (Just inside) -> const
+    pos = head plug
+    extractParentCtx :: forall a f'. Diff1 ATypeVF f' =>
+      DF (Alg ATypeVC) a -> Tuple Tag (f' a)
+    extractParentCtx = un EnvT <<< fromDF <<< fromParentCtx
+    extractParentTag :: forall a. DF (Alg ATypeVC) a -> Tag
+    extractParentTag = fst <<< extractParentCtx
+    extractParent :: forall a f'. Diff1 ATypeVF f' =>
+      DF (Alg ATypeVC) a -> f' a
+    extractParent = snd <<< extractParentCtx
+    isLeft = case _ of
+      DPairL' _ -> true
+      DPairR' _ -> false
+    getAnnFromParent :: forall a. DF (Alg ATypeVC) a -> Annot
+    getAnnFromParent = VF.match
+      { function:
+          isLeft >>> if _ then FnParen else None
+      , app:
+          isLeft >>> if _ then FnParen else FnAppParen
+      , name: absurd <<< unwrap
+      , var: absurd <<< unwrap
+      } <<< extractParent
+    ann = getAnnFromParent <$> List.head p
+    Tuple shown focus = showTaggedFrom (fst pos) ann replacement
+    d = (delta `on` snd) pos (head focus)
+    adj = append d -- technically this would prepend, but Abelian so it works out
+    adjIdx = lmap adj
+    adjLen = rmap adj
+    updateOtherChildTag priorIdxOfUpdated tag =
+      if fst tag > priorIdxOfUpdated
+        then adjIdx tag
+        else tag
+    adjustAll :: Additive Int -> ParentCtxs ATypeVC -> ParentCtxs ATypeVC
+    adjustAll _ Nil = Nil
+    adjustAll childIdx (cf : cfs) =
+      case extractParentCtx cf of
+        Tuple tag@(Tuple idx _) cx ->
           let
-            handle ::
-              (Pair ~> ATypeVF) ->
-              DPair2 ATypeVC ZipperVC ->
-              Tuple String ATypeVC
-            handle inj dpair =
-              let
-                Tuple new pair = upDPair id <$>
-                  patching1 patcher old dpair
-                caput = Tuple offset (size <> delta old new)
-              in Tuple new $ caput :< inj pair
-            patcher da =
-              patchInner da (i <> offset) $ Just ann
-            isLeft = case _ of
-              DPairL _ _ -> true
-              DPairR _ _ -> false
-            getAnn l r = case _ of
-              DPairL _ _ -> l
-              DPairR _ _ -> r
-            ann = VF2.match
-              { function:
-                  isLeft >>> if _ then FnParen else None
-              , app:
-                  isLeft >>> if _ then FnParen else FnAppParen
-              } $ inside
-          in inside # VF2.match
-            { function: handle (VF.inj _function)
-            , app: handle (VF.inj _app)
-            }
+            children = modifyHead (updateOtherChildTag childIdx) <$> cx
+            adjusted = EnvT $ Tuple (adjLen tag) children
+          in toParentCtx (toDF adjusted) : adjustAll idx cfs
+    p' = adjustAll (fst pos) p
+    realPos = fst pos <> List.foldMap
+      (fst <<< extractParentTag) p
+    new = splice realPos (snd pos) shown old
 
-delta :: forall m. Spliceable m =>
-  m -> m -> Additive Int
-delta old new = Additive $ ((-) `on` (length >>> unwrap)) new old
-
-patching1 ::
-  forall r f df a da.
-    Bitraversable df =>
-    Comonad (df (Cofree f Tag)) =>
-    Spliceable r =>
-  (da -> Tuple r a) -> r -> df (Cofree f Tag) da ->
-  Tuple r (df (Cofree f Tag) a)
-patching1 f old = disI <<< run <<< bitraverse term hole
-  where
-    term t = get <#> \diff ->
-      modifyHead (_ <> Tuple diff mempty) t
-    hole h = do
-      let
-        Tuple new n = f h
-        diff = delta old new
-      modify (_ <> diff)
-      pure (Tuple new n)
-    disI = unwrap <<< dis <<< Identity
-    run = evalState <@> mempty
+delta :: Additive Int -> Additive Int -> Additive Int
+delta old new = Additive $ ((-) `on` unwrap) new old
 
 showDataType :: DataType -> String
 showDataType (TypeAlias t) = showAType t

@@ -2,23 +2,26 @@ module Test.Main where
 
 import Combinators (aTypeApp, aTypeFunction, aTypeName, aTypeVar, alias, chainl, chainr, dataImport, dataModule, importAllFrom, importFrom, namedNewType, onlyType, qualify, typeAbsType)
 import Control.Comonad.Cofree (head, (:<))
+import Control.Comonad.Env (EnvT(..))
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE, log, logShow)
 import Data.Bitraversable (bitraverse)
 import Data.Functor.Variant (match)
+import Data.Lens (_2)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
+import Data.Newtype (un)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
 import Data.Spliceable (length)
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
-import Prelude (Unit, append, const, discard, flip, map, pure, void, ($), (<#>), (<$>), (<<<), (<>), (>>>))
+import Prelude (type (~>), Unit, append, const, discard, flip, map, pure, void, ($), (<#>), (<$>), (<<<), (<>), (>>>))
 import Printing (cofrecurse)
 import Recursion (forget)
 import Reprinting (ATypeVC, Tag, patch, showAType, showModuleData, showTagged)
-import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..), Import(..), ImportModule(..), Module(..), ModuleData, Op(..), Proper(..), Qualified(..))
-import Zippers (ZipperVC, ZipperVF, downIntoRec, extract1, extract1C, extract1C', left, leftC, rightC, simpleShowZ1, simpleShowZRec, tipRec)
+import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..), Import(..), ImportModule(..), Module(..), ModuleData, Op(..), Proper(..), Qualified(..), ATypeVF)
+import Zippers (class Diff1, ZRec(..), ZipperVC, ZipperVF, downIntoRec, extract1, extract1C, extract1C', left, leftC, rightC, simpleShowZ1, simpleShowZRec, tipRec, topRec)
 
 thisModule :: ModuleData
 thisModule =
@@ -80,7 +83,7 @@ testType = chainl aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Import
 
 otherTest :: ATypeV
 otherTest = chainr aTypeFunction (Unqualified <<< Proper <$> "Heus" :| ["Yo", "Hey"])
-
+{-
 testTypeL :: Tuple (Maybe (ZipperVF ATypeV Unit)) ATypeV
 testTypeL = extract1 left testType
 
@@ -89,14 +92,17 @@ testTypeLS = case testTypeL of
   Tuple (Just z) h ->
     "(" <> simpleShowZ1 showAType z <> ", " <> showAType h <> ")"
   Tuple Nothing h -> showAType h
-
+-}
 testTypeC :: Tuple String ATypeVC
 testTypeC = case showTagged testType of
   Tuple s v -> Tuple s $ Tuple mempty (length s) :< v
 
+testTypeShown :: String
+testTypeShown = fst testTypeC
+
 testTypeCS :: String
 testTypeCS = cofrecurse (snd testTypeC)
-
+{-
 testTypeLC :: Tuple (Maybe (ZipperVF ATypeVC Tag)) ATypeVC
 testTypeLC = extract1C rightC (snd testTypeC)
 
@@ -117,12 +123,23 @@ testPatchSameL = uncurry patch (map forget $ extract1C' leftC (snd testTypeC)) (
 
 testPatchExplodeR :: Tuple String ATypeVC
 testPatchExplodeR = patch (fst testTypeLC') otherTest (fst testTypeC)
+-}
+testPatchExplodeL :: Tuple String (ZRec ATypeVC)
+testPatchExplodeL = patch (_2 (leftInc <<< tipRec) testTypeC) otherTest
 
-testPatchExplodeL :: Tuple String ATypeVC
-testPatchExplodeL = patch (fst $ extract1C' leftC (snd testTypeC)) otherTest (fst testTypeC)
+leftIsh :: ATypeVF ~> Maybe
+leftIsh = match
+  { function: \(Pair l _) -> Just l
+  , app: \(Pair l _) -> Just l
+  , name: const Nothing
+  , var: const Nothing
+  }
+leftIng = downIntoRec leftIsh
+leftInc = downIntoRec (un EnvT >>> snd >>> leftIsh)
 
 main :: Eff ( console :: CONSOLE ) Unit
 main = do
+  {-
   let showy = bitraverse logShow (cofrecurse >>> log) >>> void
   log testTypeLS
   logShow (head (snd testTypeC))
@@ -138,13 +155,10 @@ main = do
   showy testPatchExplodeL
   log "---------- "
   log testTypeLSC
+  -}
+  let showz = bitraverse logShow (topRec >>> cofrecurse >>> log) >>> void
+  let testPath path = showz <<< patch (_2 (path <<< tipRec) testTypeC)
+  testPath leftInc otherTest
+  testPath (leftInc <<< leftInc) testType
   log (showModuleData thisModule)
-  let
-    leftIsh = match
-      { function: \(Pair l _) -> Just l
-      , app: \(Pair l _) -> Just l
-      , name: const Nothing
-      , var: const Nothing
-      }
-    leftIng = downIntoRec leftIsh
   log $ simpleShowZRec $ leftIng $ leftIng $ tipRec testType
