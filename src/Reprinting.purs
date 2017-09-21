@@ -27,7 +27,7 @@ import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (Alg, modifyHead, rewrap, whileAnnotatingDown)
 import Types (ATypeV, ATypeVF, ATypeVR, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, _app, _function, _name, _var, declKeyword, showImportModules)
-import Zippers (class Diff1, DF, DPair(DPairR', DPairL'), ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
+import Zippers (class Diff1, DF, ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
 
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
@@ -149,9 +149,7 @@ patch (Tuple old (p :<<~: plug)) replacement = Tuple new (p' :<<~: focus)
     extractParent :: forall a f'. Diff1 ATypeVF f' =>
       DF (Alg ATypeVC) a -> f' a
     extractParent = snd <<< extractParentCtx
-    isLeft = case _ of
-      DPairL' _ -> true
-      DPairR' _ -> false
+    isLeft = not fst
     getAnnFromParent :: forall a. DF (Alg ATypeVC) a -> Annot
     getAnnFromParent = VF.match
       { function:
