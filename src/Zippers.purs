@@ -2,13 +2,15 @@ module Zippers where
 
 import Prelude
 
-import Control.Comonad (class Comonad)
+import Control.Apply (lift2)
+import Control.Comonad (class Comonad, extract)
 import Control.Comonad.Cofree (Cofree)
 import Control.Comonad.Env (EnvT(..))
 import Control.Extend (class Extend)
 import Data.Bifunctor (bimap, lmap)
 import Data.Const (Const(..))
 import Data.Either (Either(..), either)
+import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Coproduct (Coproduct, left, right)
 import Data.Functor.Product (Product(..), product)
@@ -29,6 +31,7 @@ import Data.Tuple (Tuple(..), fst)
 import Data.Variant.Internal (FProxy(..), RLProxy(..))
 import Matryoshka (class Corecursive, class Recursive, Algebra, cata, embed, project)
 import Recursion (Alg)
+import Test.QuickCheck (class Arbitrary, class Coarbitrary, arbitrary, coarbitrary)
 import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
 import Types (ATypeV, ATypeVF, Ident, Proper, Qualified, _app, _function, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
@@ -74,6 +77,13 @@ liftDF fg = fromDF >>> fg >>> toDF
 instance functorDF :: Diff1 f f' => Functor (DF f) where
   map f = fromDF >>> map f >>> toDF
 
+instance arbitraryDF :: ( Diff1 f f', Arbitrary (f' x), Arbitrary x ) => Arbitrary (DF f x) where
+  arbitrary = toDF <$> arbitrary
+instance coarbitraryDF :: ( Diff1 f f', Coarbitrary (f' x), Coarbitrary x ) => Coarbitrary (DF f x) where
+  coarbitrary = fromDF >>> coarbitrary
+instance eqDF :: ( Diff1 f f', Eq (f' x), Eq x ) => Eq (DF f x) where
+  eq = eq `on` fromDF
+
 data ZF f x = ZF (DF f x) x
 infix 1 ZF as :<-:
 cxF :: forall f x. ZF f x -> DF f x
@@ -110,6 +120,13 @@ instance extendZF :: Diff1 f f' => Extend (ZF f) where
 instance comonadZF :: Diff1 f f' => Comonad (ZF f) where
   extract (_ :<-: x) = x
 
+instance arbitraryZF :: ( Diff1 f f', Arbitrary (f' x), Arbitrary x ) => Arbitrary (ZF f x) where
+  arbitrary = lift2 ZF arbitrary arbitrary
+instance coarbitraryZF :: ( Diff1 f f', Coarbitrary (f' x), Coarbitrary x ) => Coarbitrary (ZF f x) where
+  coarbitrary (c :<-: f) = coarbitrary c <<< coarbitrary f
+instance eqZF :: ( Diff1 f f', Eq (f' x), Eq x ) => Eq (ZF f x) where
+  eq (c1 :<-: f1) (c2 :<-: f2) = eq c1 c2 && eq f1 f2
+
 ixPair :: forall a b. (Boolean -> a -> b) -> Pair a -> Pair b
 ixPair f (Pair l r) = Pair (f false l) (f true r)
 
@@ -120,13 +137,14 @@ type DPair = Tuple Boolean
 instance derivativeofPair_isDPair :: Diff1 Pair (Tuple Boolean) where
   downF (Pair l r) = Pair
     (defer \_ -> toDF (Tuple false r) :<-: l)
-    (defer \_ -> toDF (Tuple true l) :<-: r)
+    (defer \_ -> toDF (Tuple true  l) :<-: r)
   upF (c :<-: x) = case fromDF c, x of
     Tuple false r, l -> Pair l r
     Tuple true  l, r -> Pair l r
   aroundF z@(c :<-: _) =
     let ix = fst (fromDF c)
-    in toDF (Tuple ix z) :<-: z
+        x = extract (fromDF c)
+    in toDF (Tuple ix (z $> x)) :<-: z
 
 type DStrMap = Compose (Tuple String) StrMap
 instance derivativeofStrMap_isDStrMap :: Diff1 StrMap (Compose (Tuple String) StrMap) where
