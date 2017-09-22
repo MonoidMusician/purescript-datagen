@@ -10,8 +10,7 @@ import Data.Bifunctor (lmap, rmap)
 import Data.Const (Const)
 import Data.Function (on)
 import Data.Functor.Variant as VF
-import Data.List (List(..), (:))
-import Data.List as List
+import Data.List.Lazy as List
 import Data.Map (toAscUnfoldable) as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
@@ -21,6 +20,7 @@ import Data.Pair (Pair(..))
 import Data.Spliceable (class Spliceable, length, splice)
 import Data.String (joinWith)
 import Data.Symbol (class IsSymbol, SProxy)
+import Data.Traversable (mapAccumL)
 import Data.Tuple (Tuple(..), fst, snd, swap)
 import Data.Variant.Internal (FProxy)
 import Matryoshka (class Recursive, Algebra)
@@ -170,14 +170,14 @@ patch (Tuple old (p :<<~: plug)) replacement = Tuple new (p' :<<~: focus)
         then adjIdx t
         else t
     adjustAll :: Additive Int -> ParentCtxs ATypeVC -> ParentCtxs ATypeVC
-    adjustAll _ Nil = Nil
-    adjustAll childIdx (cf : cfs) =
-      case extractParentCtx cf of
-        Tuple t@(Tuple idx _) cx ->
-          let
-            children = modifyHead (updateOtherChildTag childIdx) <$> cx
-            adjusted = EnvT $ Tuple (adjLen t) children
-          in toParentCtx (toDF adjusted) : adjustAll idx cfs
+    adjustAll c1 cfs = (mapAccumL go c1 cfs).value
+      where
+        go childIdx cf = case extractParentCtx cf of
+          Tuple t@(Tuple idx _) cx ->
+            let
+              children = modifyHead (updateOtherChildTag childIdx) <$> cx
+              adjusted = EnvT $ Tuple (adjLen t) children
+            in { accum: idx, value: toParentCtx (toDF adjusted) }
     p' = adjustAll (fst pos) p
     realPos = fst pos <> List.foldMap
       (fst <<< extractParentTag) p
