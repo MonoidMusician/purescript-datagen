@@ -3,7 +3,7 @@ module Zippers where
 import Prelude
 
 import Control.Apply (lift2)
-import Control.Comonad (class Comonad, extract)
+import Control.Comonad (class Comonad)
 import Control.Comonad.Cofree (Cofree)
 import Control.Comonad.Env (EnvT(..))
 import Control.Extend (class Extend)
@@ -22,7 +22,7 @@ import Data.Lens (Lens', lens, (^.))
 import Data.List (List(Nil), (:))
 import Data.Maybe (Maybe, maybe)
 import Data.Monoid.Additive (Additive)
-import Data.Newtype (unwrap)
+import Data.Newtype (unwrap, wrap)
 import Data.Pair (Pair(..))
 import Data.StrMap (StrMap)
 import Data.StrMap as StrMap
@@ -40,9 +40,15 @@ type Tag = Tuple (Additive Int) (Additive Int)
 type ATypeVC = Cofree ATypeVF Tag
 
 class (Functor f, Functor f') <= Diff1 f f' | f -> f' where
-  upF      ::  forall x. ZF f x  ->                 f x
-  downF    ::  forall x.    f x  ->     f (Lazy (ZF f x))
-  aroundF  ::  forall x. ZF f x  ->  ZF f       (ZF f x)
+  upF   :: forall x. ZF f x  ->             f x
+  downF :: forall x.    f x  -> f (Lazy (ZF f x))
+
+aroundF :: forall f f' f'' x. Diff1 f f' => Diff1 f' f'' => ZF f x  -> ZF f (ZF f x)
+aroundF z@(c :<-: f) = (_ :<-: z) $ toDF $
+  downF (fromDF c) <#> (force >>> upZ)
+  where
+    upZ :: ZF f' x -> ZF f x
+    upZ z'@(_ :<-: x) = toDF (upF z') :<-: x
 
 instance derivativeEnvT :: (Functor f, Diff1 f f') => Diff1 (EnvT e f) (EnvT e f') where
   downF (EnvT (Tuple e f)) = EnvT $ Tuple e $ downF f <#> map
@@ -51,11 +57,6 @@ instance derivativeEnvT :: (Functor f, Diff1 f f') => Diff1 (EnvT e f) (EnvT e f
     case fromDF dex of
       EnvT (Tuple e dfx) ->
         EnvT $ Tuple e $ upF (toDF' (FProxy :: FProxy f) dfx :<-: x)
-  aroundF (dex :<-: x) =
-    case fromDF dex of
-      EnvT (Tuple e dfx) ->
-        injZF2 (EnvT <<< Tuple e) $
-        aroundF (toDF' (FProxy :: FProxy f) dfx :<-: x)
 
 foreign import data DF :: (Type -> Type) -> Type -> Type
 toDF' :: forall f f' x. Diff1 f f' => FProxy f -> f' x -> DF f x
@@ -115,9 +116,9 @@ _focusF = lens (\(_ :<-: f) -> f)
 
 instance functorZF :: Diff1 f f' => Functor (ZF f) where
   map f (f'x :<-: x) = map f f'x :<-: f x
-instance extendZF :: Diff1 f f' => Extend (ZF f) where
+instance extendZF :: (Diff1 f f', Diff1 f' f'') => Extend (ZF f) where
   extend f = map f <<< aroundF
-instance comonadZF :: Diff1 f f' => Comonad (ZF f) where
+instance comonadZF :: (Diff1 f f', Diff1 f' f'') => Comonad (ZF f) where
   extract (_ :<-: x) = x
 
 instance arbitraryZF :: ( Diff1 f f', Arbitrary (f' x), Arbitrary x ) => Arbitrary (ZF f x) where
@@ -133,6 +134,10 @@ ixPair f (Pair l r) = Pair (f false l) (f true r)
 ixDPair :: forall a. DPair a -> Boolean
 ixDPair = fst
 
+instance derivativeofTuple_keepsA :: Diff1 (Tuple a) (Const a) where
+  downF (Tuple a b) = Tuple a $ defer \_ -> toDF (Const a) :<-: b
+  upF (a :<-: b) = Tuple (unwrap $ fromDF a) b
+
 type DPair = Tuple Boolean
 instance derivativeofPair_isDPair :: Diff1 Pair (Tuple Boolean) where
   downF (Pair l r) = Pair
@@ -141,10 +146,6 @@ instance derivativeofPair_isDPair :: Diff1 Pair (Tuple Boolean) where
   upF (c :<-: x) = case fromDF c, x of
     Tuple false r, l -> Pair l r
     Tuple true  l, r -> Pair l r
-  aroundF z@(c :<-: _) =
-    let ix = fst (fromDF c)
-        x = extract (fromDF c)
-    in toDF (Tuple ix (z $> x)) :<-: z
 
 type DStrMap = Compose (Tuple String) StrMap
 instance derivativeofStrMap_isDStrMap :: Diff1 StrMap (Compose (Tuple String) StrMap) where
@@ -153,33 +154,34 @@ instance derivativeofStrMap_isDStrMap :: Diff1 StrMap (Compose (Tuple String) St
   upF (c :<-: v) = case fromDF c of
     Compose (Tuple k sm) ->
       StrMap.insert k v sm
-  aroundF z@(c :<-: _) =
-    let k = fst (unwrap (fromDF c))
-    -- FIXME: probably wrong
-    in toDF (Compose (Tuple k (StrMap.singleton k z))) :<-: z
 
 instance derivativeofConst_isVoid :: Diff1 (Const a) (Const Void) where
   downF (Const a) = Const a
   upF (c :<-: _) = absurd $ unwrap $ fromDF c
-  aroundF (c :<-: _) = absurd $ unwrap $ fromDF c
 
 instance derivativeofIdentity_isUnit :: Diff1 Identity (Const Unit) where
   downF = map \x -> defer \_ ->
     toDF (Const unit) :<-: x
   upF (_ :<-: x) = Identity x
-  aroundF z = toDF (Const unit) :<-: z
 
 instance derivativeofMaybe_isUnit :: Diff1 Maybe (Const Unit) where
   downF = map \x -> defer \_ ->
     toDF (Const unit) :<-: x
   upF (_ :<-: x) = pure x
-  aroundF z = toDF (Const unit) :<-: z
 
 instance derivativeofEither_isUnit :: Diff1 (Either e) (Const Unit) where
   downF = map \x -> defer \_ ->
     toDF (Const unit) :<-: x
   upF (_ :<-: x) = pure x
-  aroundF z = toDF (Const unit) :<-: z
+
+instance derivativeofCoproduct :: ( Functor f, Diff1 f f', Functor g, Diff1 g g' ) =>
+  Diff1 (Coproduct f g) (Coproduct f' g') where
+  downF = unwrap >>> bimap
+    (downF >>> map (map (liftZF \f' -> left f')))
+    (downF >>> map (map (liftZF \g' -> right g'))) >>> wrap
+  upF (c :<-: x) = case unwrap (fromDF c) of
+    Left  f' -> left  (upF (toDF f' :<-: x))
+    Right g' -> right (upF (toDF g' :<-: x))
 
 instance derivativeofProduct :: ( Functor f, Diff1 f f', Functor g, Diff1 g g' ) =>
   Diff1 (Product f g) (Coproduct (Product f' g) (Product f g')) where
@@ -193,32 +195,6 @@ instance derivativeofProduct :: ( Functor f, Diff1 f f', Functor g, Diff1 g g' )
   downF (Product (Tuple f g)) = product
     (downF f <#> map (liftZF \f' -> left  (product f' g)))
     (downF g <#> map (liftZF \g' -> right (product f g')))
-  aroundF z@(c :<-: x) =
-    let
-      this = FProxy :: FProxy (Product f g)
-      _f = FProxy :: FProxy f
-      _g = FProxy :: FProxy g
-      intoLeft g f' = left (product f' g)
-      intoRight f g' = right (product f g')
-    in case bimap unwrap unwrap (unwrap (fromDF c)) of
-      Left (Tuple f' g) ->
-        let
-          lower = toDF' _f f' :<-: x
-          f = upF lower
-          l = cxF (aroundF lower) <#>
-              liftZF (intoLeft g)
-          r = downF g <#> force >>>
-              liftZF (intoRight f)
-        in toDF' this (left (product (fromDF l) r)) :<-: z
-      Right (Tuple f g') ->
-        let
-          lower = toDF' _g g' :<-: x
-          g = upF lower
-          l = downF f <#> force >>>
-              liftZF (intoLeft g)
-          r = cxF (aroundF lower) <#>
-              liftZF (intoRight f)
-        in toDF' this (right (product l (fromDF r))) :<-: z
 
 instance deriveofVariant_isVariantOfDerivatives ::
   ( RowToList r rl
@@ -227,19 +203,16 @@ instance deriveofVariant_isVariantOfDerivatives ::
   ) => Diff1 (VariantF r) (VariantF r') where
   downF = unsafeCoerce (downV (RLProxy :: RLProxy rl))
   upF = unsafeCoerce (upV (RLProxy :: RLProxy rl))
-  aroundF = unsafeCoerce (aroundV (RLProxy :: RLProxy rl))
 
 type VF r' a = Tuple (VariantF r' a) a
 
 class DiffVariantF (r :: # Type) (r' :: # Type) (rl :: RowList) (rl' :: RowList) | rl -> r r' rl' where
   upV :: forall a. RLProxy rl -> VF r' a -> VariantF r a
   downV :: forall a. RLProxy rl -> VariantF r a -> VariantF r (Lazy (VF r' a))
-  aroundV :: forall a. RLProxy rl -> VF r' a -> VF r' (VF r' a)
 
 instance diffVNil :: DiffVariantF () () Nil Nil where
   upV _ = fst >>> VF.case_
   downV _ = VF.case_
-  aroundV _ = fst >>> VF.case_
 
 instance diffVCons ::
   ( IsSymbol sym
@@ -267,19 +240,6 @@ instance diffVCons ::
           downV (RLProxy :: RLProxy rl) v'
         handleThis = VF.on sym \f -> VF.inj sym $
           (map (lmap (VF.inj sym) <<< fromZF) <$> downF f)
-    aroundV _ (Tuple v x) = handleThis handleOther v
-      where
-        sym = SProxy :: SProxy sym
-        handleOther v' = bimap
-          (VF.expand >>> map (lmap VF.expand))
-          (lmap VF.expand)
-          $ aroundV (RLProxy :: RLProxy rl) (Tuple v' x)
-        inj :: forall a. f' a -> VariantF r' a
-        inj = VF.inj sym
-        handleThis = VF.on sym \f' ->
-          lmap (map (fromZF >>> lmap inj) >>> inj) $
-          map (lmap inj <<< fromZF) $ fromZF $
-          aroundF $ toDF' (FProxy :: FProxy f) f' :<-: x
 
 type ParentCtx t = DF (Alg t) t
 type ParentCtxs t = List (ParentCtx t)
