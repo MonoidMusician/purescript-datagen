@@ -16,7 +16,7 @@ import Data.Functor.Coproduct (Coproduct, left, right)
 import Data.Functor.Product (Product(..), product)
 import Data.Functor.Variant (VariantF)
 import Data.Functor.Variant as VF
-import Data.Identity (Identity(..))
+import Data.Identity (Identity)
 import Data.Lazy (Lazy, defer, force)
 import Data.Lens (Lens', lens, (^.))
 import Data.List.Lazy (List, nil, uncons, (:))
@@ -42,6 +42,19 @@ type ATypeVC = Cofree ATypeVF Tag
 class (Functor f, Functor f') <= Diff1 f f' | f -> f' where
   upF   :: forall x. ZF f x  ->       f x
   downF :: forall x.    f x  -> f (ZF f x)
+
+downFTrivial ::
+  forall f x.
+    Functor f =>
+    Diff1 f (Const Unit) =>
+  f x -> f (ZF f x)
+downFTrivial = map (pure (toDF (Const unit)) :<-: _)
+upFTrivial ::
+  forall f x.
+    Applicative f =>
+    Diff1 f (Const Unit) =>
+  ZF f x -> f x
+upFTrivial = (_ ^. _focusF) >>> pure
 
 aroundF :: forall f f' f'' x. Diff1 f f' => Diff1 f' f'' => ZF f x  -> ZF f (ZF f x)
 aroundF z@(c :<-: f) =
@@ -161,16 +174,23 @@ instance derivativeofConst_isVoid :: Diff1 (Const a) (Const Void) where
   upF (c :<-: _) = absurd $ unwrap $ fromDF $ force c
 
 instance derivativeofIdentity_isUnit :: Diff1 Identity (Const Unit) where
-  downF = map \x -> pure (toDF (Const unit)) :<-: x
-  upF (_ :<-: x) = Identity x
-
+  downF f = downFTrivial f
+  upF z = upFTrivial z
 instance derivativeofMaybe_isUnit :: Diff1 Maybe (Const Unit) where
-  downF = map \x -> pure (toDF (Const unit)) :<-: x
-  upF (_ :<-: x) = pure x
-
+  downF f = downFTrivial f
+  upF z = upFTrivial z
 instance derivativeofEither_isUnit :: Diff1 (Either e) (Const Unit) where
-  downF = map \x -> pure (toDF (Const unit)) :<-: x
-  upF (_ :<-: x) = pure x
+  downF f = downFTrivial f
+  upF z = upFTrivial z
+
+instance chainRule :: ( Functor f, Diff1 f f', Functor g, Diff1 g g' ) =>
+  Diff1 (Compose f g) (Product (Compose f' g) g') where
+  downF (Compose fg) = Compose $ downF fg <#> \(f'g :<-: g) ->
+    downF g <#> liftZF \x ->
+      product (Compose (fromDF (force f'g))) x
+  upF (c :<-: x) = case lmap unwrap (unwrap (fromDF (force c))) of
+    Tuple f'g g' -> Compose $ upF $ pure (toDF f'g) :<-:
+      upF (pure (toDF g') :<-: x)
 
 instance derivativeofCoproduct :: ( Functor f, Diff1 f f', Functor g, Diff1 g g' ) =>
   Diff1 (Coproduct f g) (Coproduct f' g') where
