@@ -9,7 +9,9 @@ import Control.Monad.State (State, gets, modify, runState)
 import Data.Bifunctor (lmap, rmap)
 import Data.Const (Const)
 import Data.Function (on)
+import Data.Functor.Variant (VariantF)
 import Data.Functor.Variant as VF
+import Data.Identity (Identity(..))
 import Data.List.Lazy as List
 import Data.Map (toAscUnfoldable) as Map
 import Data.Maybe (Maybe(..))
@@ -26,7 +28,7 @@ import Data.Variant.Internal (FProxy)
 import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (Alg, modifyHead, rewrap, whileAnnotatingDown)
-import Types (ATypeV, ATypeVF, ATypeVR, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, _app, _function, _name, _var, declKeyword, showImportModules)
+import Types (AKindVF, ATypeV, ATypeVF, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, TypeAbs(..), _app, _function, _name, _row, _var, declKeyword, showImportModules)
 import Zippers (class Diff1, DF, ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
 
 -- | A tag consists of the following:
@@ -48,17 +50,17 @@ newtype Reprinter f f' m ann = Reprinter
   }
 
 tag ::
-  forall m.
+  forall m f.
     Monoid m =>
-  State m (Untagged ATypeVF) ->
-  Tuple m (Untagged ATypeVF)
+  State m (Untagged f) ->
+  Tuple m (Untagged f)
 tag = swap <<< (runState <@> mempty)
 
 recur ::
-  forall m.
+  forall m f.
     Spliceable m =>
-  Tuple m (Untagged ATypeVF) ->
-  State m (Tagged ATypeVF)
+  Tuple m (Untagged f) ->
+  State m (Tagged f)
 recur (Tuple s r) = do
   offset <- gets length
   literal s
@@ -72,11 +74,11 @@ simple :: forall f m. Functor f =>
 simple v s = Tuple s $ map absurd v
 
 simpleShowConst ::
-  forall a b sym bleh.
+  forall a b sym bleh row.
     IsSymbol sym =>
-    RowCons sym (FProxy (Const a)) bleh ATypeVR =>
+    RowCons sym (FProxy (Const a)) bleh row =>
     Show a =>
-  SProxy sym -> Const a b -> Tuple String (ATypeVF (Tagged ATypeVF))
+  SProxy sym -> Const a b -> Tuple String (VariantF row (Tagged (VariantF row)))
 simpleShowConst k v = simple (VF.inj k $ rewrap v) $ show $ unwrap v
 
 showTagged1P :: Maybe Annot -> Algebra ATypeVF (Tuple String (Untagged ATypeVF))
@@ -125,6 +127,53 @@ showAType = showTagged >>> fst
 showAType' :: forall t. Recursive t ATypeVF =>
   Maybe Annot -> t -> String
 showAType' ann = showTagged' ann >>> fst
+
+showTaggedK1P :: Maybe Annot -> Algebra AKindVF (Tuple String (Untagged AKindVF))
+showTaggedK1P p = VF.match
+  { name: simpleShowConst _name
+  , function: \(Pair l r) -> wrapTagIf mayNeedFnParen do
+      a <- recur l
+      literal " -> "
+      b <- recur r
+      pure (VF.inj _function (Pair a b))
+  , app: \(Pair l r) -> wrapTagIf mayNeedAppParen do
+      a <- recur l
+      literal " "
+      b <- recur r
+      pure (VF.inj _app (Pair a b))
+  , row: \(Identity kind) -> wrapTagIf mayNeedAppParen do
+      literal "# "
+      k <- recur kind
+      pure (VF.inj _row (Identity k))
+  }
+  where
+    wrapTagIf pred v
+      | pred p    = tag $ literal "(" *> v <* literal ")"
+      | otherwise = tag v
+
+annotPrecK :: forall a. AKindVF a -> AKindVF (Tuple Annot a)
+annotPrecK = VF.match
+  { name: VF.inj _name <<< rewrap
+  , function: VF.inj _function <<< bimapPair (Tuple FnParen) (Tuple None)
+  , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
+  , row: VF.inj _row <<< map (Tuple FnAppParen)
+  } where bimapPair f g (Pair a b) = Pair (f a) (g b)
+
+showTaggedK :: forall t. Recursive t AKindVF =>
+  t -> Tuple String (Untagged AKindVF)
+showTaggedK = whileAnnotatingDown Nothing annotPrecK showTaggedK1P
+
+showTaggedK' :: forall t. Recursive t AKindVF =>
+  Maybe Annot -> t -> Tuple String (Untagged AKindVF)
+showTaggedK' ann = whileAnnotatingDown ann annotPrecK showTaggedK1P
+
+showAKind :: forall t. Recursive t AKindVF =>
+  t -> String
+showAKind = showTaggedK >>> fst
+
+showAKind' :: forall t. Recursive t AKindVF =>
+  Maybe Annot -> t -> String
+showAKind' ann = showTaggedK' ann >>> fst
 
 evalFrom :: forall m. Spliceable m =>
   Additive Int -> Tuple m (Untagged ATypeVF) -> Tuple m ATypeVC
@@ -195,8 +244,13 @@ showDataType (SumType m) = joinWith " | " $
 showDataTypeDecls :: DataTypeDecls -> String
 showDataTypeDecls = joinWith "\n" <<< Map.toAscUnfoldable >>> map
   \(Tuple name (DataTypeDef vs dt)) ->
-    let vars = joinWithIfNE " " show vs in
+    let vars = joinWithIfNE " " showTypeAbs vs in
     show (declKeyword dt) <> " " <> show name <> vars <> " = " <> showDataType dt
+
+showTypeAbs :: TypeAbs -> String
+showTypeAbs (TypeAbs ident k) = case k of
+  Nothing -> show ident
+  Just kind -> "(" <> show ident <> " :: " <> showAKind kind <> ")"
 
 showModuleData :: ModuleData -> String
 showModuleData = do

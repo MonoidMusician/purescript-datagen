@@ -8,10 +8,7 @@ import Control.Monad.Eff.Console (CONSOLE, log, logShow)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Random (RANDOM)
 import Data.Bitraversable (bitraverse)
-import Data.Const (Const(..))
-import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (match)
-import Data.Identity (Identity(..))
 import Data.Lens (_2)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
@@ -20,7 +17,6 @@ import Data.Newtype (un)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
 import Data.Spliceable (length)
-import Data.StrMap (StrMap)
 import Data.Tuple (Tuple(Tuple), fst, snd)
 import Prelude (type (~>), Unit, append, const, discard, flip, pure, void, ($), (<#>), (<$>), (<<<), (>>>))
 import Printing (cofrecurse)
@@ -28,7 +24,7 @@ import Reprinting (ATypeVC, patch, showModuleData, showTagged)
 import Test.QuickCheck.Laws.Control (checkComonad, checkExtend)
 import Type.Proxy (Proxy2(..))
 import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..), Import(..), ImportModule(..), Module(..), ModuleData, Op(..), Proper(..), Qualified(..), ATypeVF)
-import Zippers (ZF(..), ZRec, downIntoRec, simpleShowZRec, tipRec, topRec)
+import Zippers (ZF, ZRec, downIntoRec, simpleShowZRec, tipRec, topRec)
 
 thisModule :: ModuleData
 thisModule =
@@ -136,5 +132,3 @@ main = do
   log "\nTesting comonads"
   checkExtend (Proxy2 :: Proxy2 (ZF Pair))
   checkComonad (Proxy2 :: Proxy2 (ZF Pair))
-  --checkExtend (Proxy2 :: Proxy2 (ZF StrMap))
-  --checkComonad (Proxy2 :: Proxy2 (ZF StrMap))

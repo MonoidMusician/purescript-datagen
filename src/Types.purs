@@ -8,6 +8,7 @@ import Data.Const (Const)
 import Data.Either (Either)
 import Data.Functor.Mu (Mu)
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
+import Data.Identity (Identity)
 import Data.Map (Map)
 import Data.Map (toAscUnfoldable) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -18,7 +19,6 @@ import Data.Set (Set)
 import Data.Set (toUnfoldable) as Set
 import Data.String (joinWith)
 import Data.Tuple (Tuple(..))
-import Matryoshka (Algebra, cata)
 
 newtype Module = Module (NonEmpty Array Proper)
 derive newtype instance eqModule :: Eq Module
@@ -131,30 +131,21 @@ _name = SProxy :: SProxy "name"
 _var = SProxy :: SProxy "var"
 _function = SProxy :: SProxy "function"
 _app = SProxy :: SProxy "app"
+_row = SProxy :: SProxy "row"
 
-data AKindF a
-  = KindName (Qualified Proper)
-  | KindFunction a a
-  | KindApp a a
-  | KindRow a
-newtype AKind = AKind (Mu AKindF)
-derive instance functorAKindF :: Functor AKindF
-instance showAKind :: Show AKind where
-  show (AKind inner) = cata showInner inner
-    where
-      showInner :: Algebra AKindF String
-      showInner (KindName q) = show q
-      showInner (KindFunction a b) = wrap a <> " -> " <> wrap b
-      showInner (KindApp f a) = wrap f <> " " <> wrap a
-      showInner (KindRow a) = "# " <> a
-      wrap a = "(" <> a <> ")"
+type AKindVR =
+  ( name :: FProxy (Const (Qualified Proper))
+  , function :: FProxy Pair
+  , app :: FProxy Pair
+  , row :: FProxy Identity
+  )
+type AKindVF = VariantF AKindVR
+type AKindV = Mu AKindVF
 
 type TypeAbses = Array TypeAbs
-data TypeAbs = TypeAbs Ident (Maybe AKind)
-instance showTypeAbs :: Show TypeAbs where
-  show (TypeAbs i Nothing) = show i
-  show (TypeAbs i (Just k)) = "(" <> show i <> " :: " <> show k <> ")"
+data TypeAbs = TypeAbs Ident (Maybe AKindV)
 data DataTypeDef = DataTypeDef TypeAbses DataType
+type DataTypeDecl = Tuple Proper DataTypeDef
 type DataTypeDecls = Map Proper DataTypeDef
 
 type Modules = Map Module ModuleData

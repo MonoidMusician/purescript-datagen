@@ -84,7 +84,7 @@ reDF = fromDF >>> toDF
 reDF' :: forall f g f' x. Diff1 f f' => Diff1 g f' => FProxy g -> DF f x -> DF g x
 reDF' p = fromDF >>> toDF' p
 injDF :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
-  (forall x. x ~> g x) -> DF f x -> DF (g f) x
+  (forall a. a ~> g a) -> DF f x -> DF (g f) x
 injDF g = fromDF >>> g >>> toDF
 liftDF :: forall f f' g g' x. Diff1 f f' => Diff1 g g' => (f' x -> g' x) -> DF f x -> DF g x
 liftDF fg = fromDF >>> fg >>> toDF
@@ -112,10 +112,10 @@ reZF (f'x :<-: x) = reDF <$> f'x :<-: x
 reZF' :: forall f g f' x. Diff1 f f' => Diff1 g f' => FProxy g -> ZF f x -> ZF g x
 reZF' p (f'x :<-: x) = reDF' p <$> f'x :<-: x
 injZF :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
-  (forall x. x ~> g x) -> ZF f x -> ZF (g f) x
+  (forall a. a ~> g a) -> ZF f x -> ZF (g f) x
 injZF g (f'x :<-: x) = injDF g <$> f'x :<-: x
 injZF2 :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
-  (forall x. x ~> g x) -> ZF f (ZF f x) -> ZF (g f) (ZF (g f) x)
+  (forall a. a ~> g a) -> ZF f (ZF f x) -> ZF (g f) (ZF (g f) x)
 injZF2 g (f'x :<-: x) = f'x <#> (injDF g >>> map (injZF g)) :<-: injZF g x
 liftZF :: forall f f' g g' x. Diff1 f f' => Diff1 g g' => (f' x -> g' x) -> ZF f x -> ZF g x
 liftZF fg (f'x :<-: x) = liftDF fg <$> f'x :<-: x
@@ -257,8 +257,8 @@ instance diffVCons ::
         sym = SProxy :: SProxy sym
         handleOther v' = VF.expand $ lmap (map VF.expand) <$>
           downV (RLProxy :: RLProxy rl) v'
-        handleThis = VF.on sym \f -> VF.inj sym $
-          ((\(c :<-: f) -> Tuple (defer \_ -> VF.inj sym (fromDF (force c))) f) <$> downF f)
+        handleThis = VF.on sym \f -> VF.inj sym $ downF f <#>
+          \(c :<-: f') -> Tuple (defer \_ -> VF.inj sym (fromDF (force c))) f'
 
 type ParentCtx t = DF (Alg t) t
 type ParentCtxs t = List (ParentCtx t)
