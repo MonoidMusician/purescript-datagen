@@ -12,6 +12,7 @@ import Data.Const (Const(..))
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
+import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lazy (force)
 import Data.Lens (Lens', (.~), (^.))
@@ -37,7 +38,7 @@ import Matryoshka (class Recursive, cata, embed)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC)
 import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), _app, _function, _name, _var)
-import Zippers (DF, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, fromDF, fromParentCtx, tipRec, toParentCtx, topRec, upF, (:<-:), (:<<~:))
+import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, (:<-:), (:<<~:))
 
 type Query = HL.Query State
 
@@ -62,6 +63,12 @@ type State =
 
 _typ :: Lens' State (ZRec ATypeVM)
 _typ = prop (SProxy :: SProxy "typ")
+
+hole :: ATypeVM
+hole = roll $ Compose Nothing
+
+node :: ATypeVF ATypeVM -> ATypeVM
+node = roll <<< Compose <<< Just
 
 leftIsh :: ATypeVF ~> Maybe
 leftIsh = VF.match
@@ -106,23 +113,42 @@ component =
       , HH.h2_ [ HH.text "Complete:" ]
       , renderFocus (nil :<<~: topRec typ)
       , HH.div_ -- editing
-        [ HL.Button.renderAsField "Hole" (_typ \(cxs :<<~: _) -> cxs :<<~: roll (Compose Nothing)) false
+        [ HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
         , HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
-        , HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: roll (Compose (Just (VF.inj _name (Const (Unqualified (Proper imput)))))))) s) false
+        , HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
         , HH.div_ functions
+        , HH.div_ apps
         ]
       ]
       where
-        function = _typ \(cxs :<<~: f) -> cxs :<<~: roll (Compose (Just (VF.inj _function (Pair (roll (Compose Nothing)) f))))
-        functionsSided =
-          [ HL.Button.renderAsField "Function left" function false
-          , flip (HL.Button.renderAsField "Function right") false $
-            _typ \(cxs :<<~: f) -> cxs :<<~: roll (Compose (Just (VF.inj _function (Pair f (roll (Compose Nothing))))))
-          ]
+        unsafeName q name = VF.inj _name $ Const $ q $ Proper name
+        branching :: (DF Pair ~> DF ATypeVF) -> Boolean -> ATypeVM -> ParentCtx ATypeVM
+        branching inj side other =
+          toParentCtx $ toDF $
+            Product $ Tuple (Compose (Const unit)) $
+              fromDF $ inj $ toDF $
+                Tuple side other
+        function side = _typ \(cxs :<<~: f) ->
+          branching (liftDF $ VF.inj _function) side f : cxs :<<~: hole
+        app side = _typ \(cxs :<<~: f) ->
+          branching (liftDF $ VF.inj _app) side f : cxs :<<~: hole
         functions = if isNothing (unwrap (unroll (typ ^. _focusRec)))
-          then [HL.Button.renderAsField "Function" function false]
-          else functionsSided
+          then
+            [ HL.Button.renderAsField "Function" (function false) false
+            ]
+          else
+            [ HL.Button.renderAsField "As argument to function" (function true) false
+            , HL.Button.renderAsField "As result of function" (function false) false
+            ]
+        apps = if isNothing (unwrap (unroll (typ ^. _focusRec)))
+          then
+            [ HL.Button.renderAsField "Apply" (app false) false
+            ]
+          else
+            [ HL.Button.renderAsField "As function to apply" (app true) false
+            , HL.Button.renderAsField "As argument to apply" (app false) false
+            ]
 
 
   eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
