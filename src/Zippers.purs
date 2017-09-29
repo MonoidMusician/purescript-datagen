@@ -101,8 +101,6 @@ instance eqDF :: ( Diff1 f f', Eq (f' x), Eq x ) => Eq (DF f x) where
 
 data ZF f x = ZF (Lazy (DF f x)) x
 infix 1 ZF as :<-:
-cxF :: forall f x. ZF f x -> Lazy (DF f x)
-cxF = (_ ^. _contextF)
 toZF :: forall f f' x. Diff1 f f' => Tuple (f' x) x -> ZF f x
 toZF (Tuple f'x x) = pure (toDF f'x) :<-: x
 fromZF :: forall f f' x. Diff1 f f' => ZF f x -> Tuple (f' x) x
