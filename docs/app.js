@@ -408,37 +408,51 @@ var rightIsh = Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMa
 var rightIsm = Control_Bind.composeKleisli(Data_Maybe.bindMaybe)(Data_Newtype.un(Data_Functor_Compose.newtypeCompose)(Data_Functor_Compose.Compose))(rightIsh);
 var render1 = function (arr) {
     return function (w) {
-        return function (ann) {
-            return function ($146) {
-                return (function (v) {
-                    if (v instanceof Data_Maybe.Nothing) {
-                        return w("_");
-                    };
-                    if (v instanceof Data_Maybe.Just) {
-                        return Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMatching()()(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchNil)))))(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))({
-                            name: function ($147) {
-                                return w(Data_Show.show(Types.showQualified(Types.showProper))(Data_Newtype.unwrap(Data_Const.newtypeConst)($147)));
-                            }, 
-                            "var": function ($148) {
-                                return w(Data_Show.show(Types.showIdent)(Data_Newtype.unwrap(Data_Const.newtypeConst)($148)));
-                            }, 
-                            "function": function (v1) {
-                                return arr(wrapIf(ann)(w)(Annot.mayNeedFnParen)([ v1.value0, w(" \u2192 "), v1.value1 ]));
-                            }, 
-                            app: function (v1) {
-                                return arr(wrapIf(ann)(w)(Annot.mayNeedAppParen)([ v1.value0, w(" \xb7 "), v1.value1 ]));
-                            }
-                        })(v.value0);
-                    };
-                    throw new Error("Failed pattern match at Component.AST line 327, column 32 - line 338, column 6: " + [ v.constructor.name ]);
-                })(Data_Newtype.unwrap(Data_Functor_Compose.newtypeCompose)($146));
+        return function (u) {
+            return function (ann) {
+                return function ($150) {
+                    return (function (v) {
+                        if (v instanceof Data_Maybe.Nothing) {
+                            return w("_");
+                        };
+                        if (v instanceof Data_Maybe.Just) {
+                            return Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMatching()()(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchNil)))))(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))({
+                                name: function ($151) {
+                                    return w(Data_Show.show(Types.showQualified(Types.showProper))(Data_Newtype.unwrap(Data_Const.newtypeConst)($151)));
+                                }, 
+                                "var": function ($152) {
+                                    return w(Data_Show.show(Types.showIdent)(Data_Newtype.unwrap(Data_Const.newtypeConst)($152)));
+                                }, 
+                                "function": function (v1) {
+                                    return arr(wrapIf(ann)(w)(Annot.mayNeedFnParen)([ v1.value0, w((function () {
+                                        if (u) {
+                                            return " \u2192 ";
+                                        };
+                                        return " -> ";
+                                    })()), v1.value1 ]));
+                                }, 
+                                app: function (v1) {
+                                    return arr(wrapIf(ann)(w)(Annot.mayNeedAppParen)([ v1.value0, w((function () {
+                                        if (u) {
+                                            return " \xb7 ";
+                                        };
+                                        return " ";
+                                    })()), v1.value1 ]));
+                                }
+                            })(v.value0);
+                        };
+                        throw new Error("Failed pattern match at Component.AST line 327, column 34 - line 338, column 6: " + [ v.constructor.name ]);
+                    })(Data_Newtype.unwrap(Data_Functor_Compose.newtypeCompose)($150));
+                };
             };
         };
     };
 };
-var render1Str = render1(Data_Foldable.fold(Data_Foldable.foldableArray)(Data_Monoid.monoidString))(Control_Category.id(Control_Category.categoryFn));
-var node = function ($149) {
-    return Data_Functor_Mu.roll(Data_Functor_Compose.Compose(Data_Maybe.Just.create($149)));
+var render1Str = function (u) {
+    return render1(Data_Foldable.fold(Data_Foldable.foldableArray)(Data_Monoid.monoidString))(Control_Category.id(Control_Category.categoryFn))(u);
+};
+var node = function ($153) {
+    return Data_Functor_Mu.roll(Data_Functor_Compose.Compose(Data_Maybe.Just.create($153)));
 };
 var navUp = function (z) {
     var v = Zippers.upRec(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
@@ -530,14 +544,14 @@ var navRight = function (zipper) {
                     app: function (v2) {
                         return !v2.value0;
                     }, 
-                    name: function ($150) {
-                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($150));
+                    name: function ($154) {
+                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($154));
                     }, 
-                    "var": function ($151) {
-                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($151));
+                    "var": function ($155) {
+                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($155));
                     }
                 });
-                var $78 = isLeft(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.un(Data_Functor_Product.newtypeProduct)(Data_Functor_Product.Product)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                var $80 = isLeft(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.un(Data_Functor_Product.newtypeProduct)(Data_Functor_Product.Product)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
                     return "app";
                 }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
                     return "function";
@@ -554,7 +568,7 @@ var navRight = function (zipper) {
                 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
                     return "var";
                 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v1.value0.head)))));
-                if ($78) {
+                if ($80) {
                     $tco_done = true;
                     return navUp(v);
                 };
@@ -598,14 +612,14 @@ var navLeft = function (zipper) {
                     app: function (v2) {
                         return v2.value0;
                     }, 
-                    name: function ($152) {
-                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($152));
+                    name: function ($156) {
+                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($156));
                     }, 
-                    "var": function ($153) {
-                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($153));
+                    "var": function ($157) {
+                        return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($157));
                     }
                 });
-                var $92 = isRight(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.un(Data_Functor_Product.newtypeProduct)(Data_Functor_Product.Product)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                var $94 = isRight(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.un(Data_Functor_Product.newtypeProduct)(Data_Functor_Product.Product)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
                     return "app";
                 }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
                     return "function";
@@ -622,7 +636,7 @@ var navLeft = function (zipper) {
                 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
                     return "var";
                 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v1.value0.head)))));
-                if ($92) {
+                if ($94) {
                     $tco_done = true;
                     return navUp(v);
                 };
@@ -665,8 +679,8 @@ var leftInc = Zippers.downIntoRec(Matryoshka_Class_Recursive.recursiveCofree(Dat
     return "name";
 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
     return "var";
-}))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(function ($154) {
-    return leftIsh(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.un(Control_Comonad_Env_Trans.newtypeEnvT)(Control_Comonad_Env_Trans.EnvT)($154)));
+}))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(function ($158) {
+    return leftIsh(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.un(Control_Comonad_Env_Trans.newtypeEnvT)(Control_Comonad_Env_Trans.EnvT)($158)));
 });
 var leftImg = Zippers.downIntoRec(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
     return "app";
@@ -678,29 +692,29 @@ var leftImg = Zippers.downIntoRec(Matryoshka_Class_Recursive.recursiveMu(Data_Fu
     return "var";
 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(leftIsm);
 var hole = Data_Functor_Mu.roll(Data_Maybe.Nothing.value);
-var getAnnFromParent = function ($155) {
+var getAnnFromParent = function ($159) {
     return Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMatching()()(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchNil)))))(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))({
-        "function": function ($156) {
+        "function": function ($160) {
             return (function (v) {
                 if (v) {
                     return Annot.None.value;
                 };
                 return Annot.FnParen.value;
-            })(Data_Tuple.fst($156));
+            })(Data_Tuple.fst($160));
         }, 
-        app: function ($157) {
+        app: function ($161) {
             return (function (v) {
                 if (v) {
                     return Annot.FnAppParen.value;
                 };
                 return Annot.FnParen.value;
-            })(Data_Tuple.fst($157));
+            })(Data_Tuple.fst($161));
         }, 
-        name: function ($158) {
-            return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($158));
+        name: function ($162) {
+            return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($162));
         }, 
-        "var": function ($159) {
-            return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($159));
+        "var": function ($163) {
+            return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($163));
         }
     })(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.unwrap(Data_Functor_Product.newtypeProduct)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
         return "app";
@@ -710,10 +724,10 @@ var getAnnFromParent = function ($155) {
         return "name";
     }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
         return "var";
-    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))($155))));
+    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))($159))));
 };
 var getAnnFromParents = function (cxs) {
-    return Data_Functor.mapFlipped(Data_Maybe.functorMaybe)(Data_List_Lazy.uncons(cxs))(function ($160) {
+    return Data_Functor.mapFlipped(Data_Maybe.functorMaybe)(Data_List_Lazy.uncons(cxs))(function ($164) {
         return getAnnFromParent(Zippers.fromParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "app";
         }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
@@ -724,18 +738,18 @@ var getAnnFromParents = function (cxs) {
             return "var";
         }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))((function (v) {
             return v.head;
-        })($160)));
+        })($164)));
     });
 };
 var getAnnForZipper = function (v) {
     return getAnnFromParents(v.value0);
 };
-var atnunqp = function ($161) {
-    return Combinators.aTypeName(Types.Unqualified.create(Types.Proper($161)));
+var atnunqp = function ($165) {
+    return Combinators.aTypeName(Types.Unqualified.create(Types.Proper($165)));
 };
-var testType = Combinators.aTypeApp(Combinators.aTypeFunction(Combinators.chainr(Combinators.aTypeFunction)(Data_Functor.map(Data_NonEmpty.functorNonEmpty(Data_Functor.functorArray))(function ($162) {
-    return Types.Unqualified.create(Types.Proper($162));
-})(new Data_NonEmpty.NonEmpty("Module", [ "Imports", "ImportModule" ]))))(atnunqp("IO")))(Combinators.aTypeApp(Combinators.aTypeApp(atnunqp("Map"))(Combinators.aTypeApp(atnunqp("Maybe"))(atnunqp("Module"))))(Combinators.aTypeFunction(atnunqp("Proper"))(atnunqp("AKindV"))));
+var testType = Combinators.aTypeFunction(Combinators.chainr(Combinators.aTypeFunction)(Data_Functor.map(Data_NonEmpty.functorNonEmpty(Data_Functor.functorArray))(function ($166) {
+    return Types.Unqualified.create(Types.Proper($166));
+})(new Data_NonEmpty.NonEmpty("Module", [ "Imports", "ImportModule" ]))))(Combinators.aTypeApp(atnunqp("IO"))(Combinators.aTypeApp(Combinators.aTypeApp(atnunqp("Map"))(Combinators.aTypeApp(atnunqp("Maybe"))(atnunqp("Module"))))(Combinators.aTypeFunction(atnunqp("Proper"))(atnunqp("AKindV")))));
 var annotPrec = (function () {
     var bimapPair = function (f) {
         return function (g) {
@@ -745,30 +759,32 @@ var annotPrec = (function () {
         };
     };
     return Data_Newtype.over(Data_Functor_Compose.newtypeCompose)(Data_Functor_Compose.newtypeCompose)(Data_Functor_Compose.Compose)(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMatching()()(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchNil)))))(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))({
-        name: function ($163) {
+        name: function ($167) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "name";
-            }))(Data_Const.functorConst)(Types._name)(Recursion.rewrap($163));
+            }))(Data_Const.functorConst)(Types._name)(Recursion.rewrap($167));
         }, 
-        "var": function ($164) {
+        "var": function ($168) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "var";
-            }))(Data_Const.functorConst)(Types._var)(Recursion.rewrap($164));
+            }))(Data_Const.functorConst)(Types._var)(Recursion.rewrap($168));
         }, 
-        "function": function ($165) {
+        "function": function ($169) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "function";
-            }))(Data_Pair.functorPair)(Types._function)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($165));
+            }))(Data_Pair.functorPair)(Types._function)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($169));
         }, 
-        app: function ($166) {
+        app: function ($170) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "app";
-            }))(Data_Pair.functorPair)(Types._app)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.FnAppParen.value))($166));
+            }))(Data_Pair.functorPair)(Types._app)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.FnAppParen.value))($170));
         }
     })));
 })();
 var renderStr = function (dictRecursive) {
-    return Recursion.whileAnnotatingDown(dictRecursive)(Data_Maybe.Nothing.value)(annotPrec)(render1Str);
+    return function (u) {
+        return Recursion.whileAnnotatingDown(dictRecursive)(Data_Maybe.Nothing.value)(annotPrec)(render1Str(u));
+    };
 };
 var _typ = function (dictStrong) {
     return Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
@@ -776,24 +792,16 @@ var _typ = function (dictStrong) {
     }))()()(Data_Symbol.SProxy.value)(dictStrong);
 };
 var addEvent = function (z) {
-    return function ($167) {
-        return Halogen_HTML_Elements.span([ Halogen_HTML_Events.onClick(Halogen_HTML_Events.input_(function ($168) {
-            return Lensy.create(Halogen_HTML_Lens.UpdateState.create(Control_Applicative.pure(Control_Monad_Eff.applicativeEff)(Data_Lens_Setter.set(_typ(Data_Profunctor_Strong.strongFn))(z)))($168));
-        })), Halogen_HTML_Properties.class_(Data_Newtype.wrap(Halogen_HTML_Core.newtypeClassName)("clickable")), Halogen_HTML_Properties.title(renderStr(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Lens_Getter.viewOn(z)(Zippers._focusRec(Data_Lens_Internal_Forget.strongForget)))) ])(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text($167)));
+    return function ($171) {
+        return Halogen_HTML_Elements.span([ Halogen_HTML_Events.onClick(Halogen_HTML_Events.input_(function ($172) {
+            return Lensy.create(Halogen_HTML_Lens.UpdateState.create(Control_Applicative.pure(Control_Monad_Eff.applicativeEff)(Data_Lens_Setter.set(_typ(Data_Profunctor_Strong.strongFn))(z)))($172));
+        })), Halogen_HTML_Properties.class_(Data_Newtype.wrap(Halogen_HTML_Core.newtypeClassName)("clickable")), Halogen_HTML_Properties.title(renderStr(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(true)(Data_Lens_Getter.viewOn(z)(Zippers._focusRec(Data_Lens_Internal_Forget.strongForget)))) ])(Control_Applicative.pure(Control_Applicative.applicativeArray)(Halogen_HTML_Core.text($171)));
     };
 };
-var renderFocus = function (v) {
-    var ann = getAnnForZipper(v);
-    return render1(Halogen_HTML_Elements.span_)(addEvent(v))(ann)(Data_Functor.mapFlipped(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(Zippers.downF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-        return "app";
-    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-        return "function";
-    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-        return "name";
-    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-        return "var";
-    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(Data_Functor_Mu.unroll(v.value1)))(function (v1) {
-        var pcx = Zippers.toParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+var renderFocus = function (u) {
+    return function (v) {
+        var ann = getAnnForZipper(v);
+        return render1(Halogen_HTML_Elements.span_)(addEvent(v))(u)(ann)(Data_Functor.mapFlipped(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(Zippers.downF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "app";
         }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "function";
@@ -801,124 +809,136 @@ var renderFocus = function (v) {
             return "name";
         }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "var";
-        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(Data_Lazy.force(v1.value0));
-        return renderFocus(new Zippers.ZRec(Data_List_Lazy_Types.cons(pcx)(v.value0), v1.value1));
-    }));
-};
-var renderZipper = function (zipper) {
-    var go = function ($copy_v) {
-        return function ($copy_child) {
-            var $tco_var_v = $copy_v;
-            var $tco_done = false;
-            var $tco_result;
-            function $tco_loop(v, child) {
-                var v1 = Data_List_Lazy.uncons(v.value0);
-                if (v1 instanceof Data_Maybe.Nothing) {
-                    $tco_done = true;
-                    return child;
-                };
-                if (v1 instanceof Data_Maybe.Just) {
-                    var pos = function ($169) {
-                        return Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMatching()()(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchNil)))))(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))({
-                            "function": function ($170) {
-                                return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-                                    return "function";
-                                }))(Types._function)(Data_Tuple.fst($170));
-                            }, 
-                            app: function ($171) {
-                                return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
-                                    return "app";
-                                }))(Types._app)(Data_Tuple.fst($171));
-                            }, 
-                            name: function ($172) {
-                                return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($172));
-                            }, 
-                            "var": function ($173) {
-                                return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($173));
-                            }
-                        })(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.unwrap(Data_Functor_Product.newtypeProduct)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "app";
-                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "function";
-                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "name";
-                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "var";
-                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))($169))));
-                    };
-                    var posHere = pos(Zippers.fromParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "app";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "function";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "name";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "var";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v1.value0.head));
-                    var isHere = function (cx1) {
-                        return Data_Eq.eq(Data_Variant.eqVariant()(Data_Variant_Internal.variantTagsCons(Data_Variant_Internal.variantTagsCons(Data_Variant_Internal.variantTagsNil)(new Data_Symbol.IsSymbol(function () {
-                            return "function";
-                        })))(new Data_Symbol.IsSymbol(function () {
-                            return "app";
-                        })))(Data_Variant.eqVariantCons(Data_Variant.eqVariantCons(Data_Variant.eqVariantNil)(Data_Eq.eqBoolean))(Data_Eq.eqBoolean)))(pos(cx1))(posHere);
-                    };
-                    var renderChild = function (v2) {
-                        var hic = Data_Lazy.force(v2.value0);
-                        var $118 = isHere(hic);
-                        if ($118) {
-                            return child;
-                        };
-                        return renderFocus(new Zippers.ZRec(Data_List_Lazy_Types.cons(Zippers.toParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "app";
-                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "function";
-                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "name";
-                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                            return "var";
-                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(hic))(v1.value0.tail), v2.value1));
-                    };
-                    var here = new Zippers.ZF(Control_Applicative.pure(Data_Lazy.applicativeLazy)(Zippers.fromParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "app";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "function";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "name";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "var";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v1.value0.head)), v.value1);
-                    var upped = Zippers.upF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "app";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "function";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "name";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "var";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(here);
-                    var next = new Zippers.ZRec(v1.value0.tail, Data_Functor_Mu.roll(upped));
-                    var circum = Zippers.downF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "app";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "function";
-                    }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "name";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
-                        return "var";
-                    }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(upped);
-                    $tco_var_v = next;
-                    $copy_child = render1(Halogen_HTML_Elements.span_)(addEvent(next))(getAnnFromParents(v1.value0.tail))(Data_Functor.mapFlipped(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(circum)(renderChild));
-                    return;
-                };
-                throw new Error("Failed pattern match at Component.AST line 259, column 31 - line 283, column 35: " + [ v1.constructor.name ]);
-            };
-            while (!$tco_done) {
-                $tco_result = $tco_loop($tco_var_v, $copy_child);
-            };
-            return $tco_result;
-        };
+        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(Data_Functor_Mu.unroll(v.value1)))(function (v1) {
+            var pcx = Zippers.toParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                return "app";
+            }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                return "function";
+            }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                return "name";
+            }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                return "var";
+            }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(Data_Lazy.force(v1.value0));
+            return renderFocus(u)(new Zippers.ZRec(Data_List_Lazy_Types.cons(pcx)(v.value0), v1.value1));
+        }));
     };
-    return go(zipper)(Halogen_HTML_Elements.span([ Halogen_HTML_Properties.class_(Data_Newtype.wrap(Halogen_HTML_Core.newtypeClassName)("focus")) ])([ renderFocus(zipper) ]));
+};
+var renderZipper = function (u) {
+    return function (zipper) {
+        var go = function ($copy_v) {
+            return function ($copy_child) {
+                var $tco_var_v = $copy_v;
+                var $tco_done = false;
+                var $tco_result;
+                function $tco_loop(v, child) {
+                    var v1 = Data_List_Lazy.uncons(v.value0);
+                    if (v1 instanceof Data_Maybe.Nothing) {
+                        $tco_done = true;
+                        return child;
+                    };
+                    if (v1 instanceof Data_Maybe.Just) {
+                        var pos = function ($173) {
+                            return Data_Functor_Variant.match(Data_Variant_Internal.variantFRecordMatching()()(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchCons(Data_Variant_Internal.variantFMatchNil)))))(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))({
+                                "function": function ($174) {
+                                    return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+                                        return "function";
+                                    }))(Types._function)(Data_Tuple.fst($174));
+                                }, 
+                                app: function ($175) {
+                                    return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+                                        return "app";
+                                    }))(Types._app)(Data_Tuple.fst($175));
+                                }, 
+                                name: function ($176) {
+                                    return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($176));
+                                }, 
+                                "var": function ($177) {
+                                    return Data_Void.absurd(Data_Newtype.unwrap(Data_Const.newtypeConst)($177));
+                                }
+                            })(Control_Comonad.extract(Data_Tuple.comonadTuple)(Data_Newtype.unwrap(Data_Functor_Product.newtypeProduct)(Zippers.fromDF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "app";
+                            }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "function";
+                            }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "name";
+                            }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "var";
+                            }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))($173))));
+                        };
+                        var posHere = pos(Zippers.fromParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "app";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "function";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "name";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "var";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v1.value0.head));
+                        var isHere = function (cx1) {
+                            return Data_Eq.eq(Data_Variant.eqVariant()(Data_Variant_Internal.variantTagsCons(Data_Variant_Internal.variantTagsCons(Data_Variant_Internal.variantTagsNil)(new Data_Symbol.IsSymbol(function () {
+                                return "function";
+                            })))(new Data_Symbol.IsSymbol(function () {
+                                return "app";
+                            })))(Data_Variant.eqVariantCons(Data_Variant.eqVariantCons(Data_Variant.eqVariantNil)(Data_Eq.eqBoolean))(Data_Eq.eqBoolean)))(pos(cx1))(posHere);
+                        };
+                        var renderChild = function (v2) {
+                            var hic = Data_Lazy.force(v2.value0);
+                            var $121 = isHere(hic);
+                            if ($121) {
+                                return child;
+                            };
+                            return renderFocus(u)(new Zippers.ZRec(Data_List_Lazy_Types.cons(Zippers.toParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "app";
+                            }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "function";
+                            }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "name";
+                            }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                                return "var";
+                            }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(hic))(v1.value0.tail), v2.value1));
+                        };
+                        var here = new Zippers.ZF(Control_Applicative.pure(Data_Lazy.applicativeLazy)(Zippers.fromParentCtx(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "app";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "function";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "name";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "var";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v1.value0.head)), v.value1);
+                        var upped = Zippers.upF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "app";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "function";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "name";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "var";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(here);
+                        var next = new Zippers.ZRec(v1.value0.tail, Data_Functor_Mu.roll(upped));
+                        var circum = Zippers.downF(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "app";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "function";
+                        }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "name";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+                            return "var";
+                        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(upped);
+                        $tco_var_v = next;
+                        $copy_child = render1(Halogen_HTML_Elements.span_)(addEvent(next))(u)(getAnnFromParents(v1.value0.tail))(Data_Functor.mapFlipped(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(circum)(renderChild));
+                        return;
+                    };
+                    throw new Error("Failed pattern match at Component.AST line 259, column 31 - line 283, column 35: " + [ v1.constructor.name ]);
+                };
+                while (!$tco_done) {
+                    $tco_result = $tco_loop($tco_var_v, $copy_child);
+                };
+                return $tco_result;
+            };
+        };
+        return go(zipper)(Halogen_HTML_Elements.span([ Halogen_HTML_Properties.class_(Data_Newtype.wrap(Halogen_HTML_Core.newtypeClassName)("focus")) ])([ renderFocus(u)(zipper) ]));
+    };
 };
 var component = (function () {
     var render = function (v) {
@@ -976,8 +996,8 @@ var component = (function () {
             });
         };
         var functions = Data_Functor.map(Data_Functor.functorArray)(Data_Functor.map(Halogen_HTML_Core.functorHTML)(Lensy.create))((function () {
-            var $130 = Data_Maybe.isNothing(Data_Newtype.unwrap(Data_Functor_Compose.newtypeCompose)(Data_Functor_Mu.unroll(Data_Lens_Getter.viewOn(v.typ)(Zippers._focusRec(Data_Lens_Internal_Forget.strongForget)))));
-            if ($130) {
+            var $133 = Data_Maybe.isNothing(Data_Newtype.unwrap(Data_Functor_Compose.newtypeCompose)(Data_Functor_Mu.unroll(Data_Lens_Getter.viewOn(v.typ)(Zippers._focusRec(Data_Lens_Internal_Forget.strongForget)))));
+            if ($133) {
                 return [ Halogen_HTML_Lens_Button.renderAsField("Function")($$function(false))(false) ];
             };
             return [ Halogen_HTML_Lens_Button.renderAsField("As argument to function")($$function(true))(false), Halogen_HTML_Lens_Button.renderAsField("As result of function")($$function(false))(false) ];
@@ -998,8 +1018,8 @@ var component = (function () {
             });
         };
         var apps = Data_Functor.map(Data_Functor.functorArray)(Data_Functor.map(Halogen_HTML_Core.functorHTML)(Lensy.create))((function () {
-            var $134 = Data_Maybe.isNothing(Data_Newtype.unwrap(Data_Functor_Compose.newtypeCompose)(Data_Functor_Mu.unroll(Data_Lens_Getter.viewOn(v.typ)(Zippers._focusRec(Data_Lens_Internal_Forget.strongForget)))));
-            if ($134) {
+            var $137 = Data_Maybe.isNothing(Data_Newtype.unwrap(Data_Functor_Compose.newtypeCompose)(Data_Functor_Mu.unroll(Data_Lens_Getter.viewOn(v.typ)(Zippers._focusRec(Data_Lens_Internal_Forget.strongForget)))));
+            if ($137) {
                 return [ Halogen_HTML_Lens_Button.renderAsField("Apply")(app(false))(false) ];
             };
             return [ Halogen_HTML_Lens_Button.renderAsField("As function to apply")(app(true))(false), Halogen_HTML_Lens_Button.renderAsField("As argument to apply")(app(false))(false) ];
@@ -1008,7 +1028,7 @@ var component = (function () {
             return Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
                 return "unicode";
             }))()()(Data_Symbol.SProxy.value)(dictStrong);
-        })(v)), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Inline zipper:") ]), renderZipper(v.typ), Halogen_HTML_Elements.h2_([ addEvent(leftImg(v.typ))("Focus:") ]), renderFocus(v.typ), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Complete:") ]), renderFocus(new Zippers.ZRec(Data_List_Lazy_Types.nil, Zippers.topRec(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
+        })(v)), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Inline zipper:") ]), renderZipper(v.unicode)(v.typ), Halogen_HTML_Elements.h2_([ addEvent(leftImg(v.typ))("Focus:") ]), renderFocus(v.unicode)(v.typ), Halogen_HTML_Elements.h2_([ Halogen_HTML_Core.text("Complete:") ]), renderFocus(v.unicode)(new Zippers.ZRec(Data_List_Lazy_Types.nil, Zippers.topRec(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF))(Zippers.chainRule(Data_Maybe.functorMaybe)(Zippers.derivativeofMaybe_isUnit)(Data_Functor_Variant.functorVariantF)(Zippers.deriveofVariant_isVariantOfDerivatives()(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "app";
         }))(Data_Pair.functorPair)(Zippers.derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "function";
@@ -1016,8 +1036,8 @@ var component = (function () {
             return "name";
         }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "var";
-        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v.typ))), Halogen_HTML_Elements.div_([ Data_Functor.map(Halogen_HTML_Core.functorHTML)(Lensy.create)(Halogen_HTML_Lens_Button.renderAsField("Hole")(Data_Lens_Setter.set(function ($174) {
-            return _typ(Data_Profunctor_Strong.strongFn)(Zippers._focusRec(Data_Profunctor_Strong.strongFn)($174));
+        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(v.typ))), Halogen_HTML_Elements.div_([ Data_Functor.map(Halogen_HTML_Core.functorHTML)(Lensy.create)(Halogen_HTML_Lens_Button.renderAsField("Hole")(Data_Lens_Setter.set(function ($178) {
+            return _typ(Data_Profunctor_Strong.strongFn)(Zippers._focusRec(Data_Profunctor_Strong.strongFn)($178));
         })(hole))(false)), Halogen_HTML_Elements.br_, Data_Functor.map(Halogen_HTML_Core.functorHTML)(Lensy.create)(Halogen_HTML_Lens_Input.renderAsField("Name")(function (dictStrong) {
             return Data_Lens_Record.prop(new Data_Symbol.IsSymbol(function () {
                 return "imput";
@@ -1035,8 +1055,8 @@ var component = (function () {
             return "name";
         }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowCons(Type_Row.listToRowNil)())(Zippers.diffVCons(new Data_Symbol.IsSymbol(function () {
             return "var";
-        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(Matryoshka_Fold.cata(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Variant.functorVariantF))(function ($175) {
-            return Matryoshka_Class_Corecursive.embed(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Functor_Compose.Compose(Data_Maybe.Just.create($175)));
+        }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())())))(Matryoshka_Fold.cata(Matryoshka_Class_Recursive.recursiveMu(Data_Functor_Variant.functorVariantF))(function ($179) {
+            return Matryoshka_Class_Corecursive.embed(Matryoshka_Class_Corecursive.corecursiveMu(Data_Functor_Compose.functorCompose(Data_Maybe.functorMaybe)(Data_Functor_Variant.functorVariantF)))(Data_Functor_Compose.Compose(Data_Maybe.Just.create($179)));
         })(testType))), 
         imput: "Type here", 
         unicode: true

@@ -23,7 +23,7 @@ import Data.Lazy (force)
 import Data.Lens (Lens', modifying, (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
-import Data.Maybe (Maybe(..), fromMaybe, fromMaybe', isNothing, maybe, maybe')
+import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
@@ -60,8 +60,8 @@ atnunqp = aTypeName <<< Unqualified <<< Proper
 
 testType :: ATypeV
 testType = chainr aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Imports", "ImportModule"])
-  `aTypeFunction` atnunqp "IO" `aTypeApp` ((atnunqp "Map" `aTypeApp` (atnunqp "Maybe" `aTypeApp` atnunqp "Module"))
-    `aTypeApp` (atnunqp "Proper" `aTypeFunction` atnunqp "AKindV"))
+  `aTypeFunction` (atnunqp "IO" `aTypeApp` ((atnunqp "Map" `aTypeApp` (atnunqp "Maybe" `aTypeApp` atnunqp "Module"))
+    `aTypeApp` (atnunqp "Proper" `aTypeFunction` atnunqp "AKindV")))
 
 type State =
   { typ :: ZRec ATypeVM
@@ -181,7 +181,7 @@ component =
     }
 
   render :: State -> H.ComponentHTML Query
-  render state@{ typ } =
+  render state@{ typ, unicode: u } =
     HH.div
       [ HE.onKeyUp (HE.input KeyPress)
       , HP.tabIndex 0
@@ -189,11 +189,11 @@ component =
       [ HH.h1_ [ HH.text "AST Edit PureScript Type" ]
       , Lensy <$> HL.Checkbox.renderAsField "Use unicode" (prop (SProxy :: SProxy "unicode")) state
       , HH.h2_ [ HH.text "Inline zipper:" ]
-      , renderZipper typ
+      , renderZipper u typ
       , HH.h2_ [ addEvent (leftImg typ) "Focus:" ]
-      , renderFocus typ
+      , renderFocus u typ
       , HH.h2_ [ HH.text "Complete:" ]
-      , renderFocus (nil :<<~: topRec typ)
+      , renderFocus u (nil :<<~: topRec typ)
       , HH.div_ -- editing
         [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
@@ -250,11 +250,11 @@ component =
       "ArrowRight" -> navRight
       _ -> id
 
-renderZipper :: forall p. ZRec ATypeVM -> Element p
-renderZipper zipper =
+renderZipper :: forall p. Boolean -> ZRec ATypeVM -> Element p
+renderZipper u zipper =
   go zipper $
     HH.span [HP.class_ $ wrap "focus"]
-      [renderFocus zipper]
+      [renderFocus u zipper]
   where
     go z@(cx :<<~: f) child = case uncons cx of
       Nothing -> child
@@ -277,26 +277,26 @@ renderZipper zipper =
             let hic = force cx1
             in if isHere hic
               then child
-              else renderFocus (toParentCtx hic : tail :<<~: f1)
+              else renderFocus u (toParentCtx hic : tail :<<~: f1)
         in go next $
-          render1 HH.span_ (addEvent next) (getAnnFromParents tail) $
+          render1 HH.span_ (addEvent next) u (getAnnFromParents tail) $
             circum <#> renderChild
 
 addEvent :: forall p. ZRec ATypeVM -> String -> Element p
 addEvent z = HH.span
   [ HE.onClick (HE.input_ $ Lensy <<< HL.UpdateState (pure $ _typ .~ z))
   , HP.class_ $ wrap "clickable"
-  , HP.title $ renderStr $ z ^. _focusRec
+  , HP.title $ renderStr true $ z ^. _focusRec
   ] <<< pure <<< HH.text
 
-renderFocus :: forall p. ZRec ATypeVM -> Element p
-renderFocus z@(cxs :<<~: focus) =
+renderFocus :: forall p. Boolean -> ZRec ATypeVM -> Element p
+renderFocus u z@(cxs :<<~: focus) =
   let ann = getAnnForZipper z
-  in render1 HH.span_ (addEvent z) ann $
+  in render1 HH.span_ (addEvent z) u ann $
     downF (unroll focus) <#>
       \(cx :<-: f) ->
         let pcx = toParentCtx (force cx)
-        in renderFocus (pcx : cxs :<<~: f)
+        in renderFocus u (pcx : cxs :<<~: f)
 
 getAnnForZipper :: forall a. ZRec ATypeVM -> Maybe Annot
 getAnnForZipper (cxs :<<~: _) = getAnnFromParents cxs
@@ -323,24 +323,24 @@ annotPrec = over Compose $ map $ VF.match
   , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
   } where bimapPair f g (Pair a b) = Pair (f a) (g b)
 
-render1 :: forall e. (Array e -> e) -> (String -> e) -> Maybe Annot -> ATypeVMF e -> e
-render1 arr w ann = unwrap >>> case _ of
+render1 :: forall e. (Array e -> e) -> (String -> e) -> Boolean -> Maybe Annot -> ATypeVMF e -> e
+render1 arr w u ann = unwrap >>> case _ of
   Nothing -> w "_"
   Just one -> one # VF.match
     { name: unwrap >>> show >>> w
     , var: unwrap >>> show >>> w
     , function: \(Pair l r) -> arr $
         wrapIf ann w mayNeedFnParen
-          [ l, w " → ", r ]
+          [ l, w if u then " → " else " -> ", r ]
     , app: \(Pair l r) -> arr $
         wrapIf ann w mayNeedAppParen
-          [ l, w " · ", r ]
+          [ l, w if u then " · " else " ", r ]
     }
 
-render1Str :: Maybe Annot -> ATypeVMF String -> String
-render1Str = render1 fold id
-renderStr :: forall t. Recursive t ATypeVMF => t -> String
-renderStr = whileAnnotatingDown Nothing annotPrec render1Str
+render1Str :: Boolean -> Maybe Annot -> ATypeVMF String -> String
+render1Str u = render1 fold id u
+renderStr :: forall t. Recursive t ATypeVMF => Boolean -> t -> String
+renderStr u = whileAnnotatingDown Nothing annotPrec (render1Str u)
 
 wrapIf :: forall ann e. ann -> (String -> e) -> (ann -> Boolean) -> Array e -> Array e
 wrapIf ann w f cs = if f ann then ([w "("] <> cs <> [w ")"]) else cs
