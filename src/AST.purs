@@ -3,22 +3,27 @@ module Component.AST where
 import Prelude
 
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
-import Combinators (aTypeApp, aTypeFunction, aTypeName, chainl)
+import Combinators (aTypeApp, aTypeFunction, aTypeName, chainr)
 import Control.Comonad (extract)
 import Control.Comonad.Env (EnvT(..))
 import Control.Monad.Aff (Aff)
+import Control.Monad.Eff.Console (log)
+import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import DOM (DOM)
+import DOM.Event.KeyboardEvent (key)
+import DOM.Event.Types (KeyboardEvent)
 import Data.Const (Const(..))
+import Data.Either (Either(..))
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lazy (force)
-import Data.Lens (Lens', (.~), (^.))
+import Data.Lens (Lens', modifying, (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
-import Data.Maybe (Maybe(..), isNothing)
+import Data.Maybe (Maybe(..), fromMaybe, fromMaybe', isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
@@ -38,9 +43,12 @@ import Matryoshka (class Recursive, cata, embed)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC)
 import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), _app, _function, _name, _var)
-import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, (:<-:), (:<<~:))
+import Unsafe.Coerce (unsafeCoerce)
+import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
 
-type Query = HL.Query State
+data Query a
+ = Lensy (HL.Query State a)
+ | KeyPress KeyboardEvent a
 
 type Element p = H.HTML p Query
 
@@ -51,9 +59,9 @@ atnunqp :: String -> ATypeV
 atnunqp = aTypeName <<< Unqualified <<< Proper
 
 testType :: ATypeV
-testType = chainl aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Imports", "ImportModule"])
-  `aTypeFunction` ((atnunqp "Map" `aTypeApp` (atnunqp "Maybe" `aTypeApp` atnunqp "Module"))
-    `aTypeApp` (atnunqp "Meh" `aTypeFunction` atnunqp "Eh"))
+testType = chainr aTypeFunction (Unqualified <<< Proper <$> "Module" :| ["Imports", "ImportModule"])
+  `aTypeFunction` atnunqp "IO" `aTypeApp` ((atnunqp "Map" `aTypeApp` (atnunqp "Maybe" `aTypeApp` atnunqp "Module"))
+    `aTypeApp` (atnunqp "Proper" `aTypeFunction` atnunqp "AKindV"))
 
 type State =
   { typ :: ZRec ATypeVM
@@ -77,12 +85,83 @@ leftIsh = VF.match
   , name: const Nothing
   , var: const Nothing
   }
+leftIsm :: ATypeVMF ~> Maybe
+leftIsm = un Compose >=> leftIsh
+rightIsh :: ATypeVF ~> Maybe
+rightIsh = VF.match
+  { function: \(Pair _ r) -> Just r
+  , app: \(Pair _ r) -> Just r
+  , name: const Nothing
+  , var: const Nothing
+  }
+rightIsm :: ATypeVMF ~> Maybe
+rightIsm = un Compose >=> rightIsh
 leftIng :: ZRec ATypeV -> ZRec ATypeV
 leftIng = downIntoRec leftIsh
 leftInc :: ZRec ATypeVC -> ZRec ATypeVC
 leftInc = downIntoRec (un EnvT >>> extract >>> leftIsh)
 leftImg :: ZRec ATypeVM -> ZRec ATypeVM
-leftImg = downIntoRec (un Compose >=> leftIsh)
+leftImg = downIntoRec leftIsm
+
+navFirst :: ZRec ATypeVM -> ZRec ATypeVM
+navFirst z = maybe z navFirst $ leftIsm (downRec z)
+
+navLast :: ZRec ATypeVM -> ZRec ATypeVM
+navLast z = maybe z navLast $ rightIsm (downRec z)
+
+navUp :: ZRec ATypeVM -> ZRec ATypeVM
+navUp z = case upRec z of
+  Left _ -> z
+  Right z' -> z'
+
+navDown :: ZRec ATypeVM -> ZRec ATypeVM
+navDown = downIntoRec (un Compose >=> m)
+  where
+    m :: ATypeVF ~> Maybe
+    m = VF.match
+      { function: \(Pair _ r) -> Just r
+      , app: \(Pair l _) -> Just l
+      , name: const Nothing
+      , var: const Nothing
+      }
+
+navLeft :: ZRec ATypeVM -> ZRec ATypeVM
+navLeft zipper = leftIsm (downRec zipper) #
+    maybe' (\_ -> orGetParent zipper) navLast
+  where
+    orGetParent z@(cxs :<<~: focus) =
+      case uncons cxs of
+        Nothing -> zipper
+        Just { head, tail } ->
+          let
+            isRight = VF.match
+              { function: \(Tuple r _) -> r
+              , app: \(Tuple r _) -> r
+              , name: absurd <<< unwrap
+              , var: absurd <<< unwrap
+              }
+          in if isRight $ extract $ un Product $ fromDF $ fromParentCtx head
+            then navUp z
+            else orGetParent (navUp z)
+
+navRight :: ZRec ATypeVM -> ZRec ATypeVM
+navRight zipper = rightIsm (downRec zipper) #
+    maybe' (\_ -> orGetParent zipper) navFirst
+  where
+    orGetParent z@(cxs :<<~: focus) =
+      case uncons cxs of
+        Nothing -> zipper
+        Just { head, tail } ->
+          let
+            isLeft = VF.match
+              { function: \(Tuple r _) -> not r
+              , app: \(Tuple r _) -> not r
+              , name: absurd <<< unwrap
+              , var: absurd <<< unwrap
+              }
+          in if isLeft $ extract $ un Product $ fromDF $ fromParentCtx head
+            then navUp z
+            else orGetParent (navUp z)
 
 component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
 component =
@@ -103,9 +182,12 @@ component =
 
   render :: State -> H.ComponentHTML Query
   render state@{ typ } =
-    HH.div_
+    HH.div
+      [ HE.onKeyUp (HE.input KeyPress)
+      , HP.tabIndex 0
+      ]
       [ HH.h1_ [ HH.text "AST Edit PureScript Type" ]
-      , HL.Checkbox.renderAsField "Use unicode" (prop (SProxy :: SProxy "unicode")) state
+      , Lensy <$> HL.Checkbox.renderAsField "Use unicode" (prop (SProxy :: SProxy "unicode")) state
       , HH.h2_ [ HH.text "Inline zipper:" ]
       , renderZipper typ
       , HH.h2_ [ addEvent (leftImg typ) "Focus:" ]
@@ -113,12 +195,18 @@ component =
       , HH.h2_ [ HH.text "Complete:" ]
       , renderFocus (nil :<<~: topRec typ)
       , HH.div_ -- editing
-        [ HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
+        [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
-        , HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
-        , HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
+        , Lensy <$> HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
+        , Lensy <$> HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
         , HH.div_ functions
         , HH.div_ apps
+        ]
+      , HH.div_
+        [ Lensy <$> HL.Button.renderAsField "Left" (_typ navLeft) false
+        , Lensy <$> HL.Button.renderAsField "Right" (_typ navRight) false
+        , Lensy <$> HL.Button.renderAsField "Up" (_typ navUp) false
+        , Lensy <$> HL.Button.renderAsField "Down" (_typ navDown) false
         ]
       ]
       where
@@ -133,7 +221,7 @@ component =
           branching (liftDF $ VF.inj _function) side f : cxs :<<~: hole
         app side = _typ \(cxs :<<~: f) ->
           branching (liftDF $ VF.inj _app) side f : cxs :<<~: hole
-        functions = if isNothing (unwrap (unroll (typ ^. _focusRec)))
+        functions = map Lensy <$> if isNothing (unwrap (unroll (typ ^. _focusRec)))
           then
             [ HL.Button.renderAsField "Function" (function false) false
             ]
@@ -141,7 +229,7 @@ component =
             [ HL.Button.renderAsField "As argument to function" (function true) false
             , HL.Button.renderAsField "As result of function" (function false) false
             ]
-        apps = if isNothing (unwrap (unroll (typ ^. _focusRec)))
+        apps = map Lensy <$> if isNothing (unwrap (unroll (typ ^. _focusRec)))
           then
             [ HL.Button.renderAsField "Apply" (app false) false
             ]
@@ -152,7 +240,15 @@ component =
 
 
   eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
-  eval = HL.eval
+  eval (Lensy q) = HL.eval q
+  eval (KeyPress e a) = a <$ do
+    H.liftEff $ unsafeCoerceEff $ log $ unsafeCoerce e
+    modifying _typ case key e of
+      "ArrowUp" -> navUp
+      "ArrowDown" -> navDown
+      "ArrowLeft" -> navLeft
+      "ArrowRight" -> navRight
+      _ -> id
 
 renderZipper :: forall p. ZRec ATypeVM -> Element p
 renderZipper zipper =
@@ -188,7 +284,7 @@ renderZipper zipper =
 
 addEvent :: forall p. ZRec ATypeVM -> String -> Element p
 addEvent z = HH.span
-  [ HE.onClick (HE.input_ $ HL.UpdateState (pure $ _typ .~ z))
+  [ HE.onClick (HE.input_ $ Lensy <<< HL.UpdateState (pure $ _typ .~ z))
   , HP.class_ $ wrap "clickable"
   , HP.title $ renderStr $ z ^. _focusRec
   ] <<< pure <<< HH.text
