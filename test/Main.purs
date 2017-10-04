@@ -111,7 +111,7 @@ testPatchExplodeL = patch (_2 (leftInc <<< tipRec) testTypeC) otherTest
 
 leftIsh :: ATypeVF ~> Maybe
 leftIsh = match
-  { function: \(Pair l _) -> Just l
+  { fun: \(Pair l _) -> Just l
   , app: \(Pair l _) -> Just l
   , name: const Nothing
   , var: const Nothing
