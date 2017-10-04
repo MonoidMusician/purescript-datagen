@@ -63,7 +63,7 @@ aTypeApp :: ATypeV -> ATypeV -> ATypeV
 aTypeApp = aTypePair _app
 
 aTypeFunction :: ATypeV -> ATypeV -> ATypeV
-aTypeFunction = aTypePair _function
+aTypeFunction = aTypePair _fun
 
 aTypeName :: Qualified Proper -> ATypeV
 aTypeName = aTypeConst _name

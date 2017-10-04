@@ -118,24 +118,24 @@ declKeyword (SumType m)
   | otherwise
     = TData
 type ATypeVR =
-  ( name     :: FProxy (Const (Qualified Proper))
-  , var      :: FProxy (Const Ident)
-  , function :: FProxy Pair
-  , app      :: FProxy Pair
-  -- , row      :: FProxy (Product StrMap Maybe)
+  ( name :: FProxy (Const (Qualified Proper))
+  , var :: FProxy (Const Ident)
+  , fun :: FProxy Pair
+  , app :: FProxy Pair
+  -- , row :: FProxy (Product StrMap Maybe)
   )
 type ATypeVF = VariantF ATypeVR
 type ATypeV = Mu ATypeVF
 
 _name = SProxy :: SProxy "name"
 _var = SProxy :: SProxy "var"
-_function = SProxy :: SProxy "function"
+_fun = SProxy :: SProxy "fun"
 _app = SProxy :: SProxy "app"
 _row = SProxy :: SProxy "row"
 
 type AKindVR =
   ( name :: FProxy (Const (Qualified Proper))
-  , function :: FProxy Pair
+  , fun :: FProxy Pair
   , app :: FProxy Pair
   , row :: FProxy Identity
   )

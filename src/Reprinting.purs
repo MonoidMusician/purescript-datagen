@@ -28,7 +28,7 @@ import Data.Variant.Internal (FProxy)
 import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (Alg, modifyHead, rewrap, whileAnnotatingDown)
-import Types (AKindVF, ATypeV, ATypeVF, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, TypeAbs(..), _app, _function, _name, _row, _var, declKeyword, showImportModules)
+import Types (AKindVF, ATypeV, ATypeVF, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, TypeAbs(..), _app, _fun, _name, _row, _var, declKeyword, showImportModules)
 import Zippers (class Diff1, DF, ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
 
 -- | A tag consists of the following:
@@ -85,11 +85,11 @@ showTagged1P :: Maybe Annot -> Algebra ATypeVF (Tuple String (Untagged ATypeVF))
 showTagged1P p = VF.match
   { name: simpleShowConst _name
   , var: simpleShowConst _var
-  , function: \(Pair l r) -> wrapTagIf mayNeedFnParen do
+  , fun: \(Pair l r) -> wrapTagIf mayNeedFnParen do
       a <- recur l
       literal " -> "
       b <- recur r
-      pure (VF.inj _function (Pair a b))
+      pure (VF.inj _fun (Pair a b))
   , app: \(Pair l r) -> wrapTagIf mayNeedAppParen do
       a <- recur l
       literal " "
@@ -108,7 +108,7 @@ annotPrec :: forall a. ATypeVF a -> ATypeVF (Tuple Annot a)
 annotPrec = VF.match
   { name: VF.inj _name <<< rewrap
   , var: VF.inj _var <<< rewrap
-  , function: VF.inj _function <<< bimapPair (Tuple FnParen) (Tuple None)
+  , fun: VF.inj _fun <<< bimapPair (Tuple FnParen) (Tuple None)
   , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
   } where bimapPair f g (Pair a b) = Pair (f a) (g b)
 
@@ -131,11 +131,11 @@ showAType' ann = showTagged' ann >>> fst
 showTaggedK1P :: Maybe Annot -> Algebra AKindVF (Tuple String (Untagged AKindVF))
 showTaggedK1P p = VF.match
   { name: simpleShowConst _name
-  , function: \(Pair l r) -> wrapTagIf mayNeedFnParen do
+  , fun: \(Pair l r) -> wrapTagIf mayNeedFnParen do
       a <- recur l
       literal " -> "
       b <- recur r
-      pure (VF.inj _function (Pair a b))
+      pure (VF.inj _fun (Pair a b))
   , app: \(Pair l r) -> wrapTagIf mayNeedAppParen do
       a <- recur l
       literal " "
@@ -154,7 +154,7 @@ showTaggedK1P p = VF.match
 annotPrecK :: forall a. AKindVF a -> AKindVF (Tuple Annot a)
 annotPrecK = VF.match
   { name: VF.inj _name <<< rewrap
-  , function: VF.inj _function <<< bimapPair (Tuple FnParen) (Tuple None)
+  , fun: VF.inj _fun <<< bimapPair (Tuple FnParen) (Tuple None)
   , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
   , row: VF.inj _row <<< map (Tuple FnAppParen)
   } where bimapPair f g (Pair a b) = Pair (f a) (g b)
@@ -201,7 +201,7 @@ patch (Tuple old (p :<<~: plug)) replacement = Tuple new (p' :<<~: focus)
     isLeft = not fst
     getAnnFromParent :: forall a. DF (Alg ATypeVC) a -> Annot
     getAnnFromParent = VF.match
-      { function:
+      { fun:
           isLeft >>> if _ then FnParen else None
       , app:
           isLeft >>> if _ then FnParen else FnAppParen

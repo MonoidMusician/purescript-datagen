@@ -10,7 +10,7 @@ import Data.StrMap (StrMap)
 import Data.StrMap (toUnfoldable) as StrMap
 import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll)
 import Data.Tuple (Tuple(..))
-import Types (ATypeVF, _app, _function, _name, _var)
+import Types (ATypeVF, _app, _fun, _name, _var)
 
 indent2 :: String -> String
 indent2 = replaceAll (Pattern "\n") (Replacement "\n  ")
@@ -31,7 +31,7 @@ cofrecurse v = let t = " >: " <> show (head v) in
   ( VF.case_
   # VF.on _name (unwrap >>> show >>> (_ <> t))
   # VF.on _var (unwrap >>> show >>> (_ <> t))
-  # VF.on _function (\(Pair l r) -> "function" <> t <>
+  # VF.on _fun (\(Pair l r) -> "fun" <> t <>
       indent2 ("\n" <> cofrecurse l <> "\n" <> cofrecurse r))
   # VF.on _app (\(Pair l r) -> "app" <> t <>
       indent2 ("\n" <> cofrecurse l <> "\n" <> cofrecurse r))

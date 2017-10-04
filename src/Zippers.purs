@@ -33,7 +33,7 @@ import Matryoshka (class Corecursive, class Recursive, Algebra, cata, embed, pro
 import Recursion (Alg)
 import Test.QuickCheck (class Arbitrary, class Coarbitrary, arbitrary, coarbitrary)
 import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
-import Types (ATypeV, ATypeVF, Ident, Proper, Qualified, _app, _function, _name, _var)
+import Types (ATypeV, ATypeVF, Ident, Proper, Qualified, _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 
 type Tag = Tuple (Additive Int) (Additive Int)
@@ -338,7 +338,7 @@ handleATypeVFByTypes :: forall a r.
 handleATypeVFByTypes methods = handleATypeVF
   { name: methods."Const"
   , var: methods."Const"
-  , function: methods."Pair"
+  , fun: methods."Pair"
   , app: methods."Pair"
   }
 
@@ -350,32 +350,32 @@ handleATypeVFPairs :: forall a r.
 handleATypeVFPairs methods = handleATypeVF
   { name: methods.name
   , var: methods.var
-  , function: methods."Pair"
+  , fun: methods."Pair"
   , app: methods."Pair"
   }
 
 handleATypeVFConsts :: forall a r.
   { "Const" :: forall b. Const b a -> r
-  , function :: Pair a -> r
+  , fun :: Pair a -> r
   , app :: Pair a -> r } ->
   ATypeVF a -> r
 handleATypeVFConsts methods = handleATypeVF
   { name: methods."Const"
   , var: methods."Const"
-  , function: methods.function
+  , fun: methods.fun
   , app: methods.app
   }
 
 handleATypeVF :: forall a r.
   { name :: Const (Qualified Proper) a -> r
   , var :: Const Ident a -> r
-  , function :: Pair a -> r
+  , fun :: Pair a -> r
   , app :: Pair a -> r } ->
   ATypeVF a -> r
 handleATypeVF methods = VF.case_
   # VF.on _name methods.name
   # VF.on _var methods.var
-  # VF.on _function methods.function
+  # VF.on _fun methods.fun
   # VF.on _app methods.app
 
 handleATypeVFReinjector :: forall a r.
@@ -391,7 +391,7 @@ handleATypeVFReinjector :: forall a r.
 handleATypeVFReinjector methods = VF.case_
   # VF.on _name (methods."Const" (VF.inj _name) (fromDF >>> unwrap >>> absurd))
   # VF.on _var (methods."Const" (VF.inj _var) (fromDF >>> unwrap >>> absurd))
-  # VF.on _function (methods."Pair" (VF.inj _function) (fromDF >>> VF.inj _function >>> toDF))
+  # VF.on _fun (methods."Pair" (VF.inj _fun) (fromDF >>> VF.inj _fun >>> toDF))
   # VF.on _app (methods."Pair" (VF.inj _app) (fromDF >>> VF.inj _app >>> toDF))
 
 simpleShowZRec :: ZRec ATypeV -> String
@@ -401,7 +401,7 @@ simpleShowZRec (context :<<~: focus) = go context cx
     show1 = VF.match
       { name: unwrap >>> show
       , var: unwrap >>> show
-      , function: \(Pair l r) ->
+      , fun: \(Pair l r) ->
           "(" <> l <> ") -> (" <> r <> ")"
       , app: \(Pair l r) ->
           "(" <> l <> ") (" <> r <> ")"
@@ -411,7 +411,7 @@ simpleShowZRec (context :<<~: focus) = go context cx
     go ls s = case uncons ls of
       Nothing -> s
       Just { head: h, tail: r } -> go r $ VF.match
-        { function: showBranch " -> " s
+        { fun: showBranch " -> " s
         , app: showBranch " " s
         , name: unwrap >>> absurd
         , var: unwrap >>> absurd

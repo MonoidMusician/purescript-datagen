@@ -42,7 +42,7 @@ import Halogen.HTML.Properties as HP
 import Matryoshka (class Recursive, cata, embed)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC)
-import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), _app, _function, _name, _var)
+import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
 
@@ -80,7 +80,7 @@ node = roll <<< Compose <<< Just
 
 leftIsh :: ATypeVF ~> Maybe
 leftIsh = VF.match
-  { function: \(Pair l _) -> Just l
+  { fun: \(Pair l _) -> Just l
   , app: \(Pair l _) -> Just l
   , name: const Nothing
   , var: const Nothing
@@ -89,7 +89,7 @@ leftIsm :: ATypeVMF ~> Maybe
 leftIsm = un Compose >=> leftIsh
 rightIsh :: ATypeVF ~> Maybe
 rightIsh = VF.match
-  { function: \(Pair _ r) -> Just r
+  { fun: \(Pair _ r) -> Just r
   , app: \(Pair _ r) -> Just r
   , name: const Nothing
   , var: const Nothing
@@ -119,7 +119,7 @@ navDown = downIntoRec (un Compose >=> m)
   where
     m :: ATypeVF ~> Maybe
     m = VF.match
-      { function: \(Pair _ r) -> Just r
+      { fun: \(Pair _ r) -> Just r
       , app: \(Pair l _) -> Just l
       , name: const Nothing
       , var: const Nothing
@@ -135,7 +135,7 @@ navLeft zipper = leftIsm (downRec zipper) #
         Just { head, tail } ->
           let
             isRight = VF.match
-              { function: \(Tuple r _) -> r
+              { fun: \(Tuple r _) -> r
               , app: \(Tuple r _) -> r
               , name: absurd <<< unwrap
               , var: absurd <<< unwrap
@@ -154,7 +154,7 @@ navRight zipper = rightIsm (downRec zipper) #
         Just { head, tail } ->
           let
             isLeft = VF.match
-              { function: \(Tuple r _) -> not r
+              { fun: \(Tuple r _) -> not r
               , app: \(Tuple r _) -> not r
               , name: absurd <<< unwrap
               , var: absurd <<< unwrap
@@ -218,7 +218,7 @@ component =
               fromDF $ inj $ toDF $
                 Tuple side other
         function side = _typ \(cxs :<<~: f) ->
-          branching (liftDF $ VF.inj _function) side f : cxs :<<~: hole
+          branching (liftDF $ VF.inj _fun) side f : cxs :<<~: hole
         app side = _typ \(cxs :<<~: f) ->
           branching (liftDF $ VF.inj _app) side f : cxs :<<~: hole
         functions = map Lensy <$> if isNothing (unwrap (unroll (typ ^. _focusRec)))
@@ -264,9 +264,9 @@ renderZipper u zipper =
           upped = upF here
           next = tail :<<~: roll upped
           circum = downF upped
-          pos :: forall a. DF ATypeVMF a -> Variant (function :: Boolean, app :: Boolean)
+          pos :: forall a. DF ATypeVMF a -> Variant (fun :: Boolean, app :: Boolean)
           pos = VF.match
-            { function: V.inj _function <<< fst
+            { fun: V.inj _fun <<< fst
             , app: V.inj _app <<< fst
             , name: absurd <<< unwrap
             , var: absurd <<< unwrap
@@ -298,7 +298,7 @@ renderFocus u z@(cxs :<<~: focus) =
         let pcx = toParentCtx (force cx)
         in renderFocus u (pcx : cxs :<<~: f)
 
-getAnnForZipper :: forall a. ZRec ATypeVM -> Maybe Annot
+getAnnForZipper :: ZRec ATypeVM -> Maybe Annot
 getAnnForZipper (cxs :<<~: _) = getAnnFromParents cxs
 
 getAnnFromParents :: ParentCtxs ATypeVM -> Maybe Annot
@@ -307,7 +307,7 @@ getAnnFromParents cxs = uncons cxs <#>
 
 getAnnFromParent :: forall a. DF ATypeVMF a -> Annot
 getAnnFromParent = VF.match
-  { function:
+  { fun:
       fst >>> if _ then None else FnParen
   , app:
       fst >>> if _ then FnAppParen else FnParen
@@ -319,7 +319,7 @@ annotPrec :: forall a. ATypeVMF a -> ATypeVMF (Tuple Annot a)
 annotPrec = over Compose $ map $ VF.match
   { name: VF.inj _name <<< rewrap
   , var: VF.inj _var <<< rewrap
-  , function: VF.inj _function <<< bimapPair (Tuple FnParen) (Tuple None)
+  , fun: VF.inj _fun <<< bimapPair (Tuple FnParen) (Tuple None)
   , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
   } where bimapPair f g (Pair a b) = Pair (f a) (g b)
 
@@ -329,7 +329,7 @@ render1 arr w u ann = unwrap >>> case _ of
   Just one -> one # VF.match
     { name: unwrap >>> show >>> w
     , var: unwrap >>> show >>> w
-    , function: \(Pair l r) -> arr $
+    , fun: \(Pair l r) -> arr $
         wrapIf ann w mayNeedFnParen
           [ l, w if u then " → " else " -> ", r ]
     , app: \(Pair l r) -> arr $

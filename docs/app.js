@@ -243,7 +243,7 @@ var alias = function (name) {
 };
 var aTypeFunction = aTypePair(new Data_Symbol.IsSymbol(function () {
     return "function";
-}))()(Types._function);
+}))()(Types._fun);
 var aTypeProduct = function (dictIsSymbol) {
     return function (dictFunctor) {
         return function (dictFunctor1) {
@@ -772,7 +772,7 @@ var annotPrec = (function () {
         "function": function ($169) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "function";
-            }))(Data_Pair.functorPair)(Types._function)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($169));
+            }))(Data_Pair.functorPair)(Types._fun)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($169));
         }, 
         app: function ($170) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
@@ -842,7 +842,7 @@ var renderZipper = function (u) {
                                 "function": function ($174) {
                                     return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                                         return "function";
-                                    }))(Types._function)(Data_Tuple.fst($174));
+                                    }))(Types._fun)(Data_Tuple.fst($174));
                                 }, 
                                 app: function ($175) {
                                     return Data_Variant.inj()(new Data_Symbol.IsSymbol(function () {
@@ -992,7 +992,7 @@ var component = (function () {
                     return "var";
                 }))(Data_Const.functorConst)(Zippers.derivativeofConst_isVoid)()(Type_Row.listToRowNil)(Zippers.diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                     return "function";
-                }))(Data_Tuple.functorTuple)(Types._function)))(side)(v1.value1))(v1.value0), hole);
+                }))(Data_Tuple.functorTuple)(Types._fun)))(side)(v1.value1))(v1.value0), hole);
             });
         };
         var functions = Data_Functor.map(Data_Functor.functorArray)(Data_Functor.map(Halogen_HTML_Core.functorHTML)(Lensy.create))((function () {
@@ -45180,7 +45180,7 @@ var cofrecurse = function (dictShow) {
             return "app" + (t + indent2("\x0a" + (cofrecurse(dictShow)(v1.value0) + ("\x0a" + cofrecurse(dictShow)(v1.value1)))));
         })(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
             return "function";
-        }))(Types._function)(function (v1) {
+        }))(Types._fun)(function (v1) {
             return "function" + (t + indent2("\x0a" + (cofrecurse(dictShow)(v1.value0) + ("\x0a" + cofrecurse(dictShow)(v1.value1)))));
         })(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
             return "var";
@@ -45415,7 +45415,7 @@ var showTagged1P = function (p) {
                     return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(recur(Data_Spliceable.spliceableString)(v.value1))(function (v2) {
                         return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                             return "function";
-                        }))(Data_Pair.functorPair)(Types._function)(new Data_Pair.Pair(v1, v2)));
+                        }))(Data_Pair.functorPair)(Types._fun)(new Data_Pair.Pair(v1, v2)));
                     });
                 });
             }));
@@ -45455,7 +45455,7 @@ var showTaggedK1P = function (p) {
                     return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Data_Identity.monadIdentity))(recur(Data_Spliceable.spliceableString)(v.value1))(function (v2) {
                         return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Data_Identity.monadIdentity))(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                             return "function";
-                        }))(Data_Pair.functorPair)(Types._function)(new Data_Pair.Pair(v1, v2)));
+                        }))(Data_Pair.functorPair)(Types._fun)(new Data_Pair.Pair(v1, v2)));
                     });
                 });
             }));
@@ -45511,7 +45511,7 @@ var annotPrecK = (function () {
         "function": function ($133) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "function";
-            }))(Data_Pair.functorPair)(Types._function)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($133));
+            }))(Data_Pair.functorPair)(Types._fun)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($133));
         }, 
         app: function ($134) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
@@ -45576,7 +45576,7 @@ var annotPrec = (function () {
         "function": function ($140) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
                 return "function";
-            }))(Data_Pair.functorPair)(Types._function)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($140));
+            }))(Data_Pair.functorPair)(Types._fun)(bimapPair(Data_Tuple.Tuple.create(Annot.FnParen.value))(Data_Tuple.Tuple.create(Annot.None.value))($140));
         }, 
         app: function ($141) {
             return Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
@@ -47684,7 +47684,7 @@ var declKeyword = function (v) {
 var _var = Data_Symbol.SProxy.value;
 var _row = Data_Symbol.SProxy.value;
 var _name = Data_Symbol.SProxy.value;
-var _function = Data_Symbol.SProxy.value;
+var _fun = Data_Symbol.SProxy.value;
 var _app = Data_Symbol.SProxy.value;
 module.exports = {
     AllCs: AllCs, 
@@ -47710,7 +47710,7 @@ module.exports = {
     Unqualified: Unqualified, 
     TypeAbs: TypeAbs, 
     _app: _app, 
-    _function: _function, 
+    _fun: _fun, 
     _name: _name, 
     _row: _row, 
     _var: _var, 
@@ -47911,7 +47911,7 @@ var handleATypeVF = function (methods) {
         return "app";
     }))(Types._app)(methods.app)(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
         return "function";
-    }))(Types._function)(methods["function"])(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
+    }))(Types._fun)(methods["function"])(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
         return "var";
     }))(Types._var)(methods["var"])(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
         return "name";
@@ -48327,9 +48327,9 @@ var handleATypeVFReinjector = function (methods) {
         }))(Data_Tuple.functorTuple)(Types._app)(fromDF(derivativeofPair_isDPair)($376)));
     }))(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
         return "function";
-    }))(Types._function)(methods.Pair(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
+    }))(Types._fun)(methods.Pair(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
         return "function";
-    }))(Data_Pair.functorPair)(Types._function))(function ($377) {
+    }))(Data_Pair.functorPair)(Types._fun))(function ($377) {
         return toDF(deriveofVariant_isVariantOfDerivatives()(diffVCons(new Data_Symbol.IsSymbol(function () {
             return "app";
         }))(Data_Pair.functorPair)(derivativeofPair_isDPair)()(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())(diffVCons(new Data_Symbol.IsSymbol(function () {
@@ -48340,7 +48340,7 @@ var handleATypeVFReinjector = function (methods) {
             return "var";
         }))(Data_Const.functorConst)(derivativeofConst_isVoid)()(Type_Row.listToRowNil)(diffVNil)()()()())()()()())()()()())()()()())(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowCons(Type_Row.listToRowNil)())())())()))(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
             return "function";
-        }))(Data_Tuple.functorTuple)(Types._function)(fromDF(derivativeofPair_isDPair)($377)));
+        }))(Data_Tuple.functorTuple)(Types._fun)(fromDF(derivativeofPair_isDPair)($377)));
     }))(Data_Functor_Variant.on()(new Data_Symbol.IsSymbol(function () {
         return "var";
     }))(Types._var)(methods.Const(Data_Functor_Variant.inj()(new Data_Symbol.IsSymbol(function () {
