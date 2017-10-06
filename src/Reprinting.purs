@@ -136,11 +136,6 @@ showTaggedK1P p = VF.match
       literal " -> "
       b <- recur r
       pure (VF.inj _fun (Pair a b))
-  , app: \(Pair l r) -> wrapTagIf mayNeedAppParen do
-      a <- recur l
-      literal " "
-      b <- recur r
-      pure (VF.inj _app (Pair a b))
   , row: \(Identity kind) -> wrapTagIf mayNeedAppParen do
       literal "# "
       k <- recur kind
@@ -155,7 +150,6 @@ annotPrecK :: forall a. AKindVF a -> AKindVF (Tuple Annot a)
 annotPrecK = VF.match
   { name: VF.inj _name <<< rewrap
   , fun: VF.inj _fun <<< bimapPair (Tuple FnParen) (Tuple None)
-  , app: VF.inj _app <<< bimapPair (Tuple FnParen) (Tuple FnAppParen)
   , row: VF.inj _row <<< map (Tuple FnAppParen)
   } where bimapPair f g (Pair a b) = Pair (f a) (g b)
 

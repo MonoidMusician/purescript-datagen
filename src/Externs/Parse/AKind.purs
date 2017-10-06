@@ -2,35 +2,93 @@ module Externs.Parse.AKind where
 
 import Prelude
 
-import Control.Plus (empty)
-import Data.Argonaut (Json, toArray, toString)
+import Data.Argonaut (Json)
 import Data.Argonaut as A
-import Data.Array ((!!))
+import Data.Codec (basicCodec, decode, encode, (>~>))
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), jobject)
+import Data.Codec.Argonaut as CA
+import Data.Codec.Argonaut.Common (tuple)
 import Data.Const (Const(..))
-import Data.Functor.Mu (roll)
-import Data.Functor.Variant (inj)
-import Data.Maybe (Maybe(..))
+import Data.Either (Either(..))
+import Data.Functor.Mu (Mu, roll, unroll)
+import Data.Functor.Variant as VF
+import Data.Identity (Identity(..))
+import Data.Lazy (Lazy, defer, force)
+import Data.Lens (Iso', iso)
+import Data.Maybe (Maybe(..), maybe)
+import Data.Newtype (un)
+import Data.Pair (Pair(..))
+import Data.Profunctor (dimap)
+import Data.StrMap (StrMap)
 import Data.StrMap as StrMap
-import Externs.Parse.Names (parseProper, parseQualified)
-import Prim.Repr (kindArrow, rowKind)
-import Types (AKindV, _name)
+import Data.Tuple (Tuple(..), uncurry)
+import Data.Variant (SProxy(..))
+import Data.Variant as V
+import Externs.Parse.Names (codecProper, codecQualified)
+import Types (AKindV, Proper, Qualified, AKindVF, _fun, _name, _row)
 
 prop :: String -> Json -> Maybe Json
 prop i = A.foldJsonObject Nothing (StrMap.lookup i)
 
-parseAKind :: Json -> Maybe AKindV
-parseAKind j = do
-  tag <- toString =<< prop "tag" j
-  contents <- prop "contents" j
-  case tag of
-    "NamedKind" ->
-      parseQualified parseProper contents <#>
-        Const >>> inj _name >>> roll
-    "FunKind" -> do
-      a <- toArray contents
-      a0 <- a !! 0
-      a1 <- a !! 1
-      kindArrow <$> parseAKind a0 <*> parseAKind a1
-    "Row" ->
-      rowKind <$> parseAKind contents
-    _ -> empty
+recursiveCodec :: forall f. (forall a. Lazy (JsonCodec a) -> JsonCodec (f a)) -> JsonCodec (Mu f)
+recursiveCodec codec = dimap unroll roll (codec (defer \_ -> recursiveCodec codec))
+
+contentField :: JsonCodec Json
+contentField = basicCodec (pure <<< dec) enc
+  where
+  dec :: Json -> Json
+  dec j = A.foldJsonObject j (A.fromObject <<< rename "value" "content") j
+  enc :: Json -> Json
+  enc j = A.foldJsonObject j (A.fromObject <<< rename "content" "value") j
+  rename ∷ String -> String -> A.JObject -> A.JObject
+  rename oldName newName obj = maybe obj (uncurry (StrMap.insert newName)) (StrMap.pop oldName obj)
+
+pair :: forall a. JsonCodec a -> JsonCodec (Pair a)
+pair codec = tuple codec codec # dimap
+  (\(Pair a b) -> Tuple a b)
+  (\(Tuple a b) -> Pair a b)
+
+codecAKindV :: JsonCodec AKindV
+codecAKindV = recursiveCodec inner
+  where
+    codecQualifiedProper = codecQualified codecProper
+    inner :: forall a. Lazy (JsonCodec a) -> JsonCodec (AKindVF a)
+    inner recur = jobject >~> basicCodec dec enc
+      where
+        dec o = do
+          let
+            getContent :: forall b. JsonCodec b -> Either JsonDecodeError b
+            getContent c = decode (CA.prop "contents" c) o
+          tag <- decode (CA.prop "tag" CA.string) o
+          case tag of
+            "FunKind" -> VF.inj _fun <$>
+              getContent (pair $ force recur)
+            "Row" -> VF.inj _row <<< Identity <$>
+              getContent (force recur)
+            "NamedKind" -> VF.inj _name <<< Const <$>
+              getContent codecQualifiedProper
+            _ -> Left (AtKey "tag" (UnexpectedValue (A.fromString tag)))
+        mkContent :: forall b. String -> JsonCodec b -> b -> StrMap Json
+        mkContent t c v = StrMap.fromFoldable
+          [ Tuple "tag" $ A.fromString t
+          , Tuple "contents" $ encode c v
+          ]
+        enc = VF.match
+          { fun: \v -> mkContent "FunKind" (pair $ force recur) v
+          , row: un Identity >>> \v -> mkContent "Row" (force recur) v
+          , name: un Const >>> mkContent "NamedKind" codecQualifiedProper
+          }
+    remap :: forall a. Iso' (AKindVF a) (V.Variant ("Row" :: Identity a, "FunKind" :: Pair a, "NamedKind" :: Qualified Proper))
+    remap = iso
+      (VF.match
+        { row: V.inj (SProxy :: SProxy "Row")
+        , fun: V.inj (SProxy :: SProxy "FunKind")
+        , name: V.inj (SProxy :: SProxy "NamedKind") <<< un Const
+        }
+      )
+      (V.match
+        { "Row": VF.inj _row
+        , "FunKind": VF.inj _fun
+        , "NamedKind": VF.inj _name <<< Const
+        }
+      )

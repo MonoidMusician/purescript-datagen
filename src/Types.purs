@@ -136,7 +136,6 @@ _row = SProxy :: SProxy "row"
 type AKindVR =
   ( name :: FProxy (Const (Qualified Proper))
   , fun :: FProxy Pair
-  , app :: FProxy Pair
   , row :: FProxy Identity
   )
 type AKindVF = VariantF AKindVR
