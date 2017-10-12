@@ -19,6 +19,12 @@ rowKind = roll <<< inj _row <<< Identity
 typeArg :: AKindV -> AKindV
 typeArg = kindArrow primKinds."Type"
 
+functor :: AKindV
+functor = typeArg primKinds."Type"
+
+bifunctor :: AKindV
+bifunctor = typeArg $ typeArg primKinds."Type"
+
 prim :: Module
 prim = Module (Proper "Prim" :| [])
 
@@ -37,8 +43,8 @@ primTypes ::
   , "Boolean"  :: Tuple AKindV ATypeV
   }
 primTypes =
-  { "Function": Tuple (typeArg $ typeArg primKinds."Type") $ primitive "Function"
-  , "Array": Tuple (typeArg primKinds."Type") $ primitive "Array"
+  { "Function": Tuple bifunctor $ primitive "Function"
+  , "Array": Tuple functor $ primitive "Array"
   , "Record": Tuple (kindArrow (rowKind primKinds."Type") primKinds."Type") $ primitive "Record"
   , "Int": Tuple primKinds."Type" $ primitive "Int"
   , "Number": Tuple primKinds."Type" $ primitive "Number"

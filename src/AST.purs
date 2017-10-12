@@ -3,6 +3,7 @@ module Component.AST where
 import Prelude
 
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
+import Autocomplete (customElemConf, items)
 import Combinators (aTypeApp, aTypeFunction, aTypeName, chainr)
 import Control.Comonad (extract)
 import Control.Comonad.Env (EnvT(..))
@@ -20,7 +21,7 @@ import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lazy (force)
-import Data.Lens (Lens', modifying, (.~), (^.))
+import Data.Lens (Lens', modifying, (.=), (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
@@ -32,6 +33,8 @@ import Data.Tuple (Tuple(..), fst)
 import Data.Variant (Variant)
 import Data.Variant as V
 import Halogen as H
+import Halogen.Autocomplete.Component (Message(..))
+import Halogen.Autocomplete.Component as Autocomplete
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Lens as HL
@@ -42,15 +45,19 @@ import Halogen.HTML.Properties as HP
 import Matryoshka (class Recursive, cata, embed)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC)
-import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), _app, _fun, _name, _var)
+import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), AKindV, _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
+
+type Suggestion = Tuple (Qualified Proper) AKindV
 
 data Query a
  = Lensy (HL.Query State a)
  | KeyPress KeyboardEvent a
+ | FromAutocomplete (Autocomplete.Message Suggestion) a
 
 type Element p = H.HTML p Query
+type Slot = Unit
 
 type ATypeVMF = Compose Maybe ATypeVF
 type ATypeVM = Mu ATypeVMF
@@ -165,7 +172,7 @@ navRight zipper = rightIsm (downRec zipper) #
 
 component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
 component =
-  H.component
+  H.parentComponent
     { initialState: const initialState
     , render
     , eval
@@ -180,7 +187,7 @@ component =
     , unicode: true
     }
 
-  render :: State -> H.ComponentHTML Query
+  render :: State -> H.ParentHTML Query (Autocomplete.Query Suggestion) Slot (Aff (dom :: DOM | eff))
   render state@{ typ, unicode: u } =
     HH.div
       [ HE.onKeyUp (HE.input KeyPress)
@@ -197,6 +204,7 @@ component =
       , HH.div_ -- editing
         [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
+        , HH.slot unit (Autocomplete.component customElemConf) items (HE.input FromAutocomplete)
         , Lensy <$> HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
         , Lensy <$> HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
         , HH.div_ functions
@@ -239,7 +247,7 @@ component =
             ]
 
 
-  eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
+  eval :: Query ~> H.ParentDSL State Query (Autocomplete.Query Suggestion) Slot Void (Aff (dom :: DOM | eff))
   eval (Lensy q) = HL.eval q
   eval (KeyPress e a) = a <$ do
     H.liftEff $ unsafeCoerceEff $ log $ unsafeCoerce e
@@ -249,6 +257,10 @@ component =
       "ArrowLeft" -> navLeft
       "ArrowRight" -> navRight
       _ -> id
+  eval (FromAutocomplete (Changed s) a) = pure a
+  eval (FromAutocomplete (Selected (Tuple q k)) a) = a <$ do
+    (_typ <<< _focusRec) .= roll (Compose $ Just $ VF.inj _name $ Const q)
+    H.query unit (Autocomplete.Input "" unit)
 
 renderZipper :: forall p. Boolean -> ZRec ATypeVM -> Element p
 renderZipper u zipper =

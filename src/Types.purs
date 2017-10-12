@@ -30,8 +30,10 @@ instance showModule :: Show Module where
 lastOf :: Module -> Proper
 lastOf (Module (n :| ns)) = fromMaybe n $ last ns
 data Qualified a
-  = Qualified Module a
-  | Unqualified a
+  = Unqualified a
+  | Qualified Module a
+derive instance eqQualified :: Eq a => Eq (Qualified a)
+derive instance ordQualified :: Ord a => Ord (Qualified a)
 instance showQualified :: Show a => Show (Qualified a) where
   show (Unqualified a) = show a
   show (Qualified m a) = show m <> "." <> show a

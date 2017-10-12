@@ -14,7 +14,6 @@ import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Variant as VF
 import Data.Identity (Identity(..))
 import Data.Lazy (Lazy, defer, force)
-import Data.Lens (Iso', iso)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un)
 import Data.Pair (Pair(..))
@@ -22,10 +21,8 @@ import Data.Profunctor (dimap)
 import Data.StrMap (StrMap)
 import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..), uncurry)
-import Data.Variant (SProxy(..))
-import Data.Variant as V
 import Externs.Parse.Names (codecProper, codecQualified)
-import Types (AKindV, Proper, Qualified, AKindVF, _fun, _name, _row)
+import Types (AKindV, AKindVF, _fun, _name, _row)
 
 prop :: String -> Json -> Maybe Json
 prop i = A.foldJsonObject Nothing (StrMap.lookup i)
@@ -78,17 +75,3 @@ codecAKindV = recursiveCodec inner
           , row: un Identity >>> \v -> mkContent "Row" (force recur) v
           , name: un Const >>> mkContent "NamedKind" codecQualifiedProper
           }
-    remap :: forall a. Iso' (AKindVF a) (V.Variant ("Row" :: Identity a, "FunKind" :: Pair a, "NamedKind" :: Qualified Proper))
-    remap = iso
-      (VF.match
-        { row: V.inj (SProxy :: SProxy "Row")
-        , fun: V.inj (SProxy :: SProxy "FunKind")
-        , name: V.inj (SProxy :: SProxy "NamedKind") <<< un Const
-        }
-      )
-      (V.match
-        { "Row": VF.inj _row
-        , "FunKind": VF.inj _fun
-        , "NamedKind": VF.inj _name <<< Const
-        }
-      )

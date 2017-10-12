@@ -3,19 +3,24 @@ module Externs.Parse.Names where
 import Prelude
 
 import Control.MonadZero (empty)
-
 import Data.Argonaut as A
 import Data.Array (cons, drop, uncons, (!!))
+import Data.Bifunctor (lmap)
+import Data.Bitraversable (ltraverse)
 import Data.Char (fromCharCode)
 import Data.Char.Unicode (isUpper)
-import Data.Codec (basicCodec, decode, encode)
-import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..))
+import Data.Codec (basicCodec, decode, encode, (>~>))
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), string)
 import Data.Codec.Argonaut.Common (tuple)
-import Data.Codec.Argonaut.Compat (maybe)
+import Data.Codec.Argonaut.Compat (maybe, strMap)
 import Data.Either (note)
+import Data.Lens (Prism', preview, review)
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.NonEmpty ((:|))
 import Data.Profunctor (dimap)
+import Data.StrMap as SM
 import Data.String.CodePoints (Pattern(..), codePointAt, codePointToInt, split)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
@@ -54,8 +59,18 @@ ensureProper s = do
     else empty
 
 codecProper :: JsonCodec Proper
-codecProper = basicCodec dec enc
+codecProper = string >~> basicCodec dec show
   where
-    dec s = note (UnexpectedValue s) $
-      A.toString s >>= ensureProper
-    enc = show >>> A.fromString
+    dec s = note (UnexpectedValue (A.fromString s)) $
+      ensureProper s
+
+codecStrMapish :: forall k v. Ord k => Prism' String k -> JsonCodec v -> JsonCodec (Map k v)
+codecStrMapish codecKey codecValue = strMap codecValue >~> basicCodec dec enc
+  where
+    asArray = id :: Array ~> Array
+    dec s =
+      let
+        conv = traverse $ ltraverse \k ->
+          note (UnexpectedValue (A.fromString k)) $ preview codecKey k
+      in Map.fromFoldable <$> conv (asArray (SM.toUnfoldable s))
+    enc = SM.fromFoldable <<< map (lmap (review codecKey)) <<< asArray <<< Map.toUnfoldable
