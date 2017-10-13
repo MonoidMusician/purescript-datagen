@@ -3,7 +3,7 @@ module Test.Main where
 import Combinators (aTypeApp, aTypeFunction, aTypeName, aTypeVar, alias, chainl, chainr, dataImport, dataModule, importAllFrom, importFrom, namedNewType, onlyType, qualify, typeAbsType)
 import Control.Comonad.Cofree ((:<))
 import Control.Comonad.Env (EnvT(..))
-import Control.Monad.Eff (Eff)
+import Control.Monad.Eff (Eff, kind Effect)
 import Control.Monad.Eff.Console (CONSOLE, log, logShow)
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Eff.Random (RANDOM)
@@ -27,6 +27,7 @@ import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..)
 import Zippers (ZF, ZRec, downIntoRec, simpleShowZRec, tipRec, topRec)
 
 type EmptyRow = ()
+type EmptyEffect = () :: # Effect
 
 thisModule :: ModuleData
 thisModule =
