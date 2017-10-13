@@ -140,30 +140,25 @@ inferKindM t env = lmap (whileInferring t) $
   (un Compose $ unroll t)
 
 vfEqCase ::
-  forall sym fnc v' v a.
+  forall sym fnc v' v v1' v1 a.
     IsSymbol sym =>
     Eq (fnc a) =>
-    RowCons sym (VF.FProxy fnc) v' v =>
-  VF.SProxy sym ->
-  (VF.VariantF v' a -> VF.VariantF v' a -> Boolean) ->
-  VF.VariantF v a -> VF.VariantF v a ->
-  Boolean
-vfEqCase k handle this that = this #
-  VF.on k (\l -> that # VF.on k (\r -> l == r) (VF.default false))
-    \notHere  -> that # VF.on k (const false) \notThere -> handle notHere notThere
-
-vfEqBase :: forall a. VF.VariantF () a -> VF.VariantF () a -> Boolean
-vfEqBase = const VF.case_
+    RowCons sym (FProxy fnc) v' v =>
+    RowCons sym (FProxy fnc) v1' v1 =>
+  SProxy sym ->
+  (VariantF v' a -> VariantF v1 a -> Boolean) ->
+  VariantF v a -> VariantF v1 a -> Boolean
+vfEqCase k = VF.on k (\a -> VF.default false # VF.on k (eq a))
 
 newtype Eq1AKindVF a = Eq1AKindVF (AKindVF a)
 derive instance newtypeEq1AKindVF :: Newtype (Eq1AKindVF a) _
 derive newtype instance functorEq1AKindVF :: Functor Eq1AKindVF
 instance eq1AKindVF :: Eq1 Eq1AKindVF where
-  eq1 = (vfEqBase # vfEqCase _name # vfEqCase _row # vfEqCase _fun) `on` unwrap
+  eq1 = (VF.case_ # vfEqCase _name # vfEqCase _row # vfEqCase _fun) `on` unwrap
 
 eqKind :: AKindV -> AKindV -> Boolean
 eqKind = eq `on` transMu Eq1AKindVF
 
 matchKind :: forall a t r. a -> AKindV -> AKindV -> Either (KindErrorVBase t AKindV r) a
-matchKind _ k1 k2 | k1 `eqKind` k2 = Left $ doesNotMatch k1 k2
+matchKind _ k1 k2 | k1 `not eqKind` k2 = Left $ doesNotMatch k1 k2
 matchKind a _ _ = Right a
