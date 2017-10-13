@@ -2,7 +2,7 @@ module Main where
 
 import Prelude
 import Halogen.Aff as HA
-import Component.AST (component)
+import Component (component)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Halogen.VDom.Driver (runUI)

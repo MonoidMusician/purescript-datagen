@@ -5,18 +5,24 @@ import Prelude
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE, log, logShow)
 import Control.Monad.Eff.Exception (EXCEPTION)
-import Data.Argonaut (jsonParser)
-import Data.Array (filterA, mapMaybe)
-import Data.Codec.Argonaut (printJsonDecodeError)
+import Control.Semigroupoid (composeFlipped)
+import Data.Argonaut (jsonParser, stringify)
+import Data.Array (filterA, mapMaybe, unsnoc)
+import Data.Codec.Argonaut (encode, printJsonDecodeError)
 import Data.Either (either)
-import Data.Foldable (for_, traverse_)
-import Data.Map (toUnfoldable)
+import Data.Lens (prism')
+import Data.Map as Map
+import Data.Maybe (Maybe(..))
+import Data.String (Pattern(..), joinWith, split)
+import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Externs.Parse (externsJustTypes)
-import Externs.Parse.Names (parseModule)
+import Externs.Parse.AKind (codecAKindV)
+import Externs.Parse.Names (codecStrMapish, ensureProper, parseModule)
+import Externs.Parse.TypeData (codecTypeKindData)
 import Node.Encoding (Encoding(..))
 import Node.FS (FS)
-import Node.FS.Sync (exists, readTextFile, readdir)
+import Node.FS.Sync (exists, readTextFile, readdir, writeTextFile)
 import Reprinting (showAKind)
 import Types (Module, Qualified(..))
 
@@ -29,15 +35,20 @@ main = do
   let modulos = dirs # mapMaybe parseModule
   modules <- filterA (exists <<< externsFor) modulos
   logShow modules
-  for_ modules \modul -> do
+  allTypes <- Map.unions <<< map Map.fromFoldable <$> for modules \modul -> do
     file <- readTextFile UTF8 $ externsFor modul
     -- logShow file
-    let mp = jsonParser file
+    let
+      mp = jsonParser file
+      asArray = id :: Array ~> Array
+      none e = e $> []
+      handler = either (none <<< log) $ composeFlipped externsJustTypes $
+        either (none <<< log <<< printJsonDecodeError) $
+          Map.toUnfoldable >>> asArray >>> traverse \(Tuple name k) ->
+            let q = Qualified modul name
+            in log ("Type " <> show q <> " has kind " <> showAKind k) $>
+                Tuple q k
     -- logShow mp
-    let asArray = id :: Array ~> Array
-    for_ (mp <#> externsJustTypes) $
-      either (log <<< printJsonDecodeError) $
-        toUnfoldable >>> asArray >>> traverse_ \(Tuple name k) ->
-          let q = Qualified modul name
-          in log ("Type " <> show q <> " has kind " <> showAKind k)
+    handler mp
+  writeTextFile UTF8 "docs/types.json" $ stringify $ encode codecTypeKindData allTypes
   pure unit

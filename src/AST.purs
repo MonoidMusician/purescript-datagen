@@ -3,18 +3,21 @@ module Component.AST where
 import Prelude
 
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
-import Autocomplete (customElemConf, items)
+import Autocomplete (customElemConf)
 import Combinators (aTypeApp, aTypeFunction, aTypeName, chainr)
 import Control.Comonad (extract)
 import Control.Comonad.Env (EnvT(..))
 import Control.Monad.Aff (Aff)
+import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import DOM (DOM)
 import DOM.Event.KeyboardEvent (key)
 import DOM.Event.Types (KeyboardEvent)
+import Data.Argonaut (jsonParser)
+import Data.Codec (decode)
 import Data.Const (Const(..))
-import Data.Either (Either(..))
+import Data.Either (Either(..), fromRight)
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu, roll, unroll)
@@ -24,6 +27,7 @@ import Data.Lazy (force)
 import Data.Lens (Lens', modifying, (.=), (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
+import Data.Map (toUnfoldable)
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
@@ -32,7 +36,10 @@ import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), fst)
 import Data.Variant (Variant)
 import Data.Variant as V
+import Externs.Parse.TypeData (TypeKindData, codecTypeKindData)
 import Halogen as H
+import Halogen.Aff (awaitBody, runHalogenAff)
+import Halogen.Aff.Driver (HalogenEffects)
 import Halogen.Autocomplete.Component (Message(..))
 import Halogen.Autocomplete.Component as Autocomplete
 import Halogen.HTML as HH
@@ -42,7 +49,11 @@ import Halogen.HTML.Lens.Button as HL.Button
 import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
 import Halogen.HTML.Properties as HP
+import Halogen.VDom.Driver (runUI)
 import Matryoshka (class Recursive, cata, embed)
+import Milkis (defaultFetchOptions, fetch, text)
+import Node.HTTP (HTTP)
+import Partial.Unsafe (unsafePartial)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC)
 import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), AKindV, _app, _fun, _name, _var)
@@ -74,6 +85,7 @@ type State =
   { typ :: ZRec ATypeVM
   , imput :: String
   , unicode :: Boolean
+  , types :: TypeKindData
   }
 
 _typ :: Lens' State (ZRec ATypeVM)
@@ -170,25 +182,26 @@ navRight zipper = rightIsm (downRec zipper) #
             then navUp z
             else orGetParent (navUp z)
 
-component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
+component :: forall eff. H.Component HH.HTML Query TypeKindData Void (Aff (dom :: DOM | eff))
 component =
   H.parentComponent
-    { initialState: const initialState
+    { initialState: initialState
     , render
     , eval
     , receiver: const Nothing
     }
   where
 
-  initialState :: State
+  initialState :: TypeKindData -> State
   initialState =
     { typ: leftImg $ tipRec $ cata (embed <<< Compose <<< Just) testType
     , imput: "Type here"
     , unicode: true
+    , types: _
     }
 
   render :: State -> H.ParentHTML Query (Autocomplete.Query Suggestion) Slot (Aff (dom :: DOM | eff))
-  render state@{ typ, unicode: u } =
+  render state@{ typ, unicode: u, types: items } =
     HH.div
       [ HE.onKeyUp (HE.input KeyPress)
       , HP.tabIndex 0
@@ -204,7 +217,7 @@ component =
       , HH.div_ -- editing
         [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
-        , HH.slot unit (Autocomplete.component customElemConf) items (HE.input FromAutocomplete)
+        , HH.slot unit (Autocomplete.component customElemConf) (toUnfoldable items) (HE.input FromAutocomplete)
         , Lensy <$> HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
         , Lensy <$> HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
         , HH.div_ functions
@@ -356,3 +369,10 @@ renderStr u = whileAnnotatingDown Nothing annotPrec (render1Str u)
 
 wrapIf :: forall ann e. ann -> (String -> e) -> (ann -> Boolean) -> Array e -> Array e
 wrapIf ann w f cs = if f ann then ([w "("] <> cs <> [w ")"]) else cs
+
+main :: Eff (HalogenEffects ( http :: HTTP )) Unit
+main = runHalogenAff do
+  body <- awaitBody
+  typeData <- fetch "http://localhost:8000/types.json" defaultFetchOptions >>= text
+  let types = unsafePartial fromRight (decode codecTypeKindData (unsafePartial fromRight (jsonParser typeData)))
+  runUI component types body

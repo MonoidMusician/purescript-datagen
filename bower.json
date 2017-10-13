@@ -23,7 +23,8 @@
     "purescript-halogen-autocomplete": "https://github.com/kRITZCREEK/purescript-halogen-autocomplete.git",
     "purescript-either": "^3.1.0",
     "purescript-codec-argonaut": "^4.0.0",
-    "purescript-maps": "^3.5.0"
+    "purescript-maps": "^3.5.0",
+    "purescript-milkis": "0.2.0"
   },
   "devDependencies": {
     "purescript-node-fs": "^4.0.0"
