@@ -1,4 +1,4 @@
-module Externs.Parse.TypeData where
+module Externs.Codec.TypeData where
 
 import Prelude
 
@@ -8,8 +8,8 @@ import Data.Lens (Prism', prism')
 import Data.Map (Map)
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), joinWith, split)
-import Externs.Parse.AKind (codecAKindV)
-import Externs.Parse.Names (codecStrMapish, ensureProper, parseModule)
+import Externs.Codec.AKind (codecAKindV)
+import Externs.Codec.Names (codecStrMapish, ensureProper, parseModule)
 import Types (AKindV, Proper, Qualified(..))
 
 type TypeKindData = Map (Qualified Proper) AKindV

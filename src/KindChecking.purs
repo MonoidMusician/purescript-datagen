@@ -1,4 +1,4 @@
-module TypeChecking where
+module KindChecking where
 
 import Prelude
 
@@ -17,7 +17,7 @@ import Data.Newtype (class Newtype, un, unwrap)
 import Data.Pair (Pair(..))
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, snd)
-import Externs.Parse.TypeData (TypeKindData)
+import Externs.Codec.TypeData (TypeKindData)
 import Matryoshka (cata)
 import Prim.Repr (primKinds)
 import Reprinting (showAKind)

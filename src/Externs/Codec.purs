@@ -1,4 +1,4 @@
-module Externs.Parse where
+module Externs.Codec where
 
 import Prelude
 
@@ -14,8 +14,8 @@ import Data.StrMap as StrMap
 import Data.Traversable (sequence, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant)
-import Externs.Parse.AKind (codecAKindV)
-import Externs.Parse.Names (codecProper)
+import Externs.Codec.AKind (codecAKindV)
+import Externs.Codec.Names (codecProper)
 import Types (AKindV, Proper)
 
 type ExternsDeclaration = Variant

@@ -39,7 +39,7 @@ import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), fst)
 import Data.Variant (Variant)
 import Data.Variant as V
-import Externs.Parse.TypeData (TypeKindData, codecTypeKindData)
+import Externs.Codec.TypeData (TypeKindData, codecTypeKindData)
 import Halogen as H
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.Aff.Driver (HalogenEffects)
@@ -53,13 +53,13 @@ import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
-import Matryoshka (class Recursive, cata, embed)
+import Matryoshka (class Recursive)
 import Network.HTTP.Affjax (AJAX, get)
 import Partial.Unsafe (unsafePartial)
 import Prim.Repr (primTypesMap)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC, showAKind)
-import TypeChecking (inferKindM, showKindError)
+import KindChecking (inferKindM, showKindError)
 import Types (AKindV, ATypeV, ATypeVF, ATypeVM, ATypeVMF, Proper(..), Qualified(..), _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
@@ -195,7 +195,7 @@ component =
 
   initialState :: TypeKindData -> State
   initialState =
-    { typ: leftImg $ tipRec $ cata (embed <<< Compose <<< Just) testType
+    { typ: tipRec hole
     , imput: "Type here"
     , unicode: true
     , types: _
@@ -249,19 +249,19 @@ component =
           branching (liftDF $ VF.inj _app) side f : cxs :<<~: hole
         functions = map Lensy <$> if isNothing (unwrap (unroll (typ ^. _focusRec)))
           then
-            [ HL.Button.renderAsField "Function" (function false) false
+            [ HL.Button.renderAsField "Function type" (function false) false
             ]
           else
-            [ HL.Button.renderAsField "As argument to function" (function true) false
-            , HL.Button.renderAsField "As result of function" (function false) false
+            [ HL.Button.renderAsField "Give it an argument" (function false) false
+            , HL.Button.renderAsField "Make it an argument" (function true) false
             ]
         apps = map Lensy <$> if isNothing (unwrap (unroll (typ ^. _focusRec)))
           then
-            [ HL.Button.renderAsField "Apply" (app false) false
+            [ HL.Button.renderAsField "Type application" (app false) false
             ]
           else
-            [ HL.Button.renderAsField "As function to apply" (app true) false
-            , HL.Button.renderAsField "As argument to apply" (app false) false
+            [ HL.Button.renderAsField "Make it a parameter" (app false) false
+            , HL.Button.renderAsField "Give it a parameter" (app true) false
             ]
         renderKind t = case inferKindM t (Tuple items empty) of
           Left err -> HH.text $ showKindError (renderStr true) err

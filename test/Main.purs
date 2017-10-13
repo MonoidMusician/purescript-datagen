@@ -26,6 +26,8 @@ import Type.Proxy (Proxy2(..))
 import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..), Import(..), ImportModule(..), Module(..), ModuleData, Op(..), Proper(..), Qualified(..), ATypeVF)
 import Zippers (ZF, ZRec, downIntoRec, simpleShowZRec, tipRec, topRec)
 
+type EmptyRow = ()
+
 thisModule :: ModuleData
 thisModule =
   { imports: Map.fromFoldable

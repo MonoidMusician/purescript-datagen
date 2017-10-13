@@ -78,7 +78,7 @@ simpleShowConst ::
     IsSymbol sym =>
     RowCons sym (FProxy (Const a)) bleh row =>
     Show a =>
-  SProxy sym -> Const a b -> Tuple String (VariantF row (Tagged (VariantF row)))
+  SProxy sym -> Const a b -> Tuple String (Untagged (VariantF row))
 simpleShowConst k v = simple (VF.inj k $ rewrap v) $ show $ unwrap v
 
 showTagged1P :: Maybe Annot -> Algebra ATypeVF (Tuple String (Untagged ATypeVF))

@@ -9,7 +9,7 @@ import Data.Map (fromFoldable)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
 import Data.Tuple (Tuple(..), fst)
-import Externs.Parse.TypeData (TypeKindData)
+import Externs.Codec.TypeData (TypeKindData)
 import Prelude (($), (<$>), (<<<))
 import Types (AKindV, Module(..), Proper(..), Qualified(..), ATypeV, _fun, _name, _row)
 

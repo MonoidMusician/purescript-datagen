@@ -1,4 +1,4 @@
-module Externs.Parse.Names where
+module Externs.Codec.Names where
 
 import Prelude
 

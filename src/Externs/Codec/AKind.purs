@@ -1,4 +1,4 @@
-module Externs.Parse.AKind where
+module Externs.Codec.AKind where
 
 import Prelude
 
@@ -21,7 +21,7 @@ import Data.Profunctor (dimap)
 import Data.StrMap (StrMap)
 import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..), uncurry)
-import Externs.Parse.Names (codecProper, codecQualified)
+import Externs.Codec.Names (codecProper, codecQualified)
 import Types (AKindV, AKindVF, _fun, _name, _row)
 
 prop :: String -> Json -> Maybe Json
