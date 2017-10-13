@@ -6,6 +6,7 @@ import Data.Array (concatMap, last)
 import Data.Array (fromFoldable) as Array
 import Data.Const (Const)
 import Data.Either (Either)
+import Data.Functor.Compose (Compose)
 import Data.Functor.Mu (Mu)
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Identity (Identity)
@@ -128,6 +129,8 @@ type ATypeVR =
   )
 type ATypeVF = VariantF ATypeVR
 type ATypeV = Mu ATypeVF
+type ATypeVMF = Compose Maybe ATypeVF
+type ATypeVM = Mu ATypeVMF
 
 _name = SProxy :: SProxy "name"
 _var = SProxy :: SProxy "var"

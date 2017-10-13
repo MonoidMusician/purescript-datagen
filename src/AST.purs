@@ -14,24 +14,28 @@ import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import DOM (DOM)
 import DOM.Event.KeyboardEvent (key)
 import DOM.Event.Types (KeyboardEvent)
+import DOM.HTML (window)
+import DOM.HTML.Location (href)
+import DOM.HTML.Window (location)
 import Data.Argonaut (jsonParser)
 import Data.Codec (decode)
 import Data.Const (Const(..))
 import Data.Either (Either(..), fromRight)
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
-import Data.Functor.Mu (Mu, roll, unroll)
+import Data.Functor.Mu (roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lazy (force)
 import Data.Lens (Lens', modifying, (.=), (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
-import Data.Map (toUnfoldable)
+import Data.Map (empty, toUnfoldable)
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
+import Data.String (Pattern(..), Replacement(..), replace)
 import Data.Symbol (SProxy(..))
 import Data.Tuple (Tuple(..), fst)
 import Data.Variant (Variant)
@@ -54,9 +58,11 @@ import Matryoshka (class Recursive, cata, embed)
 import Milkis (defaultFetchOptions, fetch, text)
 import Node.HTTP (HTTP)
 import Partial.Unsafe (unsafePartial)
+import Prim.Repr (functor, primKinds, typeArg)
 import Recursion (rewrap, whileAnnotatingDown)
-import Reprinting (ATypeVC)
-import Types (ATypeV, ATypeVF, Proper(Proper), Qualified(..), AKindV, _app, _fun, _name, _var)
+import Reprinting (ATypeVC, showAKind)
+import TypeChecking (eqKind, inferKindM, showKindError)
+import Types (ATypeVM, ATypeVMF, ATypeV, ATypeVF, Proper(Proper), Qualified(..), AKindV, _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
 
@@ -69,9 +75,6 @@ data Query a
 
 type Element p = H.HTML p Query
 type Slot = Unit
-
-type ATypeVMF = Compose Maybe ATypeVF
-type ATypeVM = Mu ATypeVMF
 
 atnunqp :: String -> ATypeV
 atnunqp = aTypeName <<< Unqualified <<< Proper
@@ -214,6 +217,10 @@ component =
       , renderFocus u typ
       , HH.h2_ [ HH.text "Complete:" ]
       , renderFocus u (nil :<<~: topRec typ)
+      , HH.h2_ [ HH.text "Kinds:", HH.text (show (functor `eqKind` typeArg primKinds."Type")) ]
+      , renderKind (typ ^. _focusRec)
+      , HH.br_
+      , renderKind (topRec typ)
       , HH.div_ -- editing
         [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
@@ -258,6 +265,9 @@ component =
             [ HL.Button.renderAsField "As function to apply" (app true) false
             , HL.Button.renderAsField "As argument to apply" (app false) false
             ]
+        renderKind t = case inferKindM t (Tuple items empty) of
+          Left err -> HH.text $ showKindError (renderStr true) err
+          Right k -> HH.text $ showAKind k
 
 
   eval :: Query ~> H.ParentDSL State Query (Autocomplete.Query Suggestion) Slot Void (Aff (dom :: DOM | eff))
@@ -271,9 +281,11 @@ component =
       "ArrowRight" -> navRight
       _ -> id
   eval (FromAutocomplete (Changed s) a) = pure a
-  eval (FromAutocomplete (Selected (Tuple q k)) a) = a <$ do
+  eval (FromAutocomplete (Selected (Tuple q k)) a) = do
     (_typ <<< _focusRec) .= roll (Compose $ Just $ VF.inj _name $ Const q)
-    H.query unit (Autocomplete.Input "" unit)
+    _ <- H.query unit (Autocomplete.Input "" unit)
+    _ <- H.query unit (Autocomplete.Close (Autocomplete.CuzSelect (show q)) unit)
+    pure a
 
 renderZipper :: forall p. Boolean -> ZRec ATypeVM -> Element p
 renderZipper u zipper =
@@ -373,6 +385,8 @@ wrapIf ann w f cs = if f ann then ([w "("] <> cs <> [w ")"]) else cs
 main :: Eff (HalogenEffects ( http :: HTTP )) Unit
 main = runHalogenAff do
   body <- awaitBody
-  typeData <- fetch "http://localhost:8000/types.json" defaultFetchOptions >>= text
+  url <- H.liftEff (window >>= location >>= href)
+  let typesUrl = replace (Pattern "ast.html") (Replacement "types.json") url
+  typeData <- fetch typesUrl defaultFetchOptions >>= text
   let types = unsafePartial fromRight (decode codecTypeKindData (unsafePartial fromRight (jsonParser typeData)))
   runUI component types body
