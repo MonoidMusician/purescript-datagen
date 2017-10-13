@@ -17,7 +17,6 @@ import DOM.Event.Types (KeyboardEvent)
 import DOM.HTML (window)
 import DOM.HTML.Location (href)
 import DOM.HTML.Window (location)
-import Data.Argonaut (jsonParser)
 import Data.Codec (decode)
 import Data.Const (Const(..))
 import Data.Either (Either(..), fromRight)
@@ -55,13 +54,12 @@ import Halogen.HTML.Lens.Input as HL.Input
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 import Matryoshka (class Recursive, cata, embed)
-import Milkis (defaultFetchOptions, fetch, text)
-import Node.HTTP (HTTP)
+import Network.HTTP.Affjax (AJAX, get)
 import Partial.Unsafe (unsafePartial)
-import Prim.Repr (functor, primKinds, primTypesMap, typeArg)
+import Prim.Repr (primTypesMap)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC, showAKind)
-import TypeChecking (eqKind, inferKindM, showKindError)
+import TypeChecking (inferKindM, showKindError)
 import Types (AKindV, ATypeV, ATypeVF, ATypeVM, ATypeVMF, Proper(..), Qualified(..), _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
@@ -217,7 +215,7 @@ component =
       , renderFocus u typ
       , HH.h2_ [ HH.text "Complete:" ]
       , renderFocus u (nil :<<~: topRec typ)
-      , HH.h2_ [ HH.text "Kinds:", HH.text (show (functor `eqKind` typeArg primKinds."Type")) ]
+      , HH.h2_ [ HH.text "Kinds:" ]
       , renderKind (typ ^. _focusRec)
       , HH.br_
       , renderKind (topRec typ)
@@ -382,11 +380,11 @@ renderStr u = whileAnnotatingDown Nothing annotPrec (render1Str u)
 wrapIf :: forall ann e. ann -> (String -> e) -> (ann -> Boolean) -> Array e -> Array e
 wrapIf ann w f cs = if f ann then ([w "("] <> cs <> [w ")"]) else cs
 
-main :: Eff (HalogenEffects ( http :: HTTP )) Unit
+main :: Eff (HalogenEffects ( ajax :: AJAX )) Unit
 main = runHalogenAff do
   body <- awaitBody
   url <- H.liftEff (window >>= location >>= href)
   let typesUrl = replace (Pattern "ast.html") (Replacement "types.json") url
-  typeData <- fetch typesUrl defaultFetchOptions >>= text
-  let types = unsafePartial fromRight (decode codecTypeKindData (unsafePartial fromRight (jsonParser typeData)))
+  typeData <- get typesUrl <#> _.response
+  let types = unsafePartial fromRight (decode codecTypeKindData typeData)
   runUI component (union types primTypesMap) body
