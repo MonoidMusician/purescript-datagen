@@ -1,14 +1,23 @@
 module Prim.Repr where
 
+import Data.Bifunctor (bimap)
 import Data.Const (Const(..))
 import Data.Functor.Mu (Mu, roll)
 import Data.Functor.Variant (FProxy, VariantF, inj)
 import Data.Identity (Identity(..))
+import Data.Map (fromFoldable)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
-import Data.Tuple (Tuple(..))
-import Prelude (($), (<<<))
+import Data.Tuple (Tuple(..), fst)
+import Externs.Parse.TypeData (TypeKindData)
+import Prelude (($), (<$>), (<<<))
 import Types (AKindV, Module(..), Proper(..), Qualified(..), ATypeV, _fun, _name, _row)
+
+mPrim :: Module
+mPrim = Module (Proper "Prim" :| [])
+
+inPrim :: forall a. a -> Qualified a
+inPrim = Qualified mPrim
 
 kindArrow :: AKindV -> AKindV -> AKindV
 kindArrow arg res = roll $ inj _fun $ Pair arg res
@@ -52,6 +61,18 @@ primTypes =
   , "Char": Tuple primKinds."Type" $ primitive "Char"
   , "Boolean": Tuple primKinds."Type" $ primitive "Boolean"
   }
+
+primTypesMap :: TypeKindData
+primTypesMap = fromFoldable $ bimap (inPrim <<< Proper) fst <$>
+  [ Tuple "Function" primTypes."Function"
+  , Tuple "Array" primTypes."Array"
+  , Tuple "Record" primTypes."Record"
+  , Tuple "Int" primTypes."Int"
+  , Tuple "Number" primTypes."Number"
+  , Tuple "String" primTypes."String"
+  , Tuple "Char" primTypes."Char"
+  , Tuple "Boolean" primTypes."Boolean"
+  ]
 
 primKinds ::
   { "Type"   :: AKindV

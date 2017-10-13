@@ -30,7 +30,7 @@ import Data.Lazy (force)
 import Data.Lens (Lens', modifying, (.=), (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
-import Data.Map (empty, toUnfoldable)
+import Data.Map (empty, toUnfoldable, union)
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
@@ -58,11 +58,11 @@ import Matryoshka (class Recursive, cata, embed)
 import Milkis (defaultFetchOptions, fetch, text)
 import Node.HTTP (HTTP)
 import Partial.Unsafe (unsafePartial)
-import Prim.Repr (functor, primKinds, typeArg)
+import Prim.Repr (functor, primKinds, primTypesMap, typeArg)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC, showAKind)
 import TypeChecking (eqKind, inferKindM, showKindError)
-import Types (ATypeVM, ATypeVMF, ATypeV, ATypeVF, Proper(Proper), Qualified(..), AKindV, _app, _fun, _name, _var)
+import Types (AKindV, ATypeV, ATypeVF, ATypeVM, ATypeVMF, Proper(..), Qualified(..), _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
 
@@ -389,4 +389,4 @@ main = runHalogenAff do
   let typesUrl = replace (Pattern "ast.html") (Replacement "types.json") url
   typeData <- fetch typesUrl defaultFetchOptions >>= text
   let types = unsafePartial fromRight (decode codecTypeKindData (unsafePartial fromRight (jsonParser typeData)))
-  runUI component types body
+  runUI component (union types primTypesMap) body
