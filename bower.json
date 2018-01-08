@@ -10,7 +10,7 @@
   ],
   "dependencies": {
     "purescript-console": "^3.0.0",
-    "purescript-halogen": "^2.0.0",
+    "purescript-halogen": "^3.0.0",
     "purescript-stringutils": "^0.0.6",
     "purescript-strings": "^3.3.1",
     "purescript-unicode": "^3.0.1",
@@ -24,7 +24,7 @@
     "purescript-either": "^3.1.0",
     "purescript-codec-argonaut": "^4.0.0",
     "purescript-maps": "^3.5.0",
-    "purescript-affjax": "^4.0.0"
+    "purescript-affjax": "5.0.0"
   },
   "devDependencies": {
     "purescript-node-fs": "^4.0.0"

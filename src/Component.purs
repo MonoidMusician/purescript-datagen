@@ -185,7 +185,7 @@ withLenses lenser getarr st =
     (st ^. getarr)
 
 tryDeleteAt :: Int -> Array ~> Array
-tryDeleteAt i a = Array.deleteAt i a # fromMaybe a
+tryDeleteAt i = fromMaybe <*> Array.deleteAt i
 
 renderField :: forall p. Int -> State -> ALens' State Annotation -> Array (Element p)
 renderField i state alens =
