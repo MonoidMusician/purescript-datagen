@@ -105,7 +105,7 @@ instance monoidConstructors :: Monoid Constructors where
 
 data DataType
   = TypeAlias ATypeV
-  | SumType (Map Proper (Array ATypeV))
+  | SumType (Array (Tuple Proper (Array ATypeV)))
 data DeclKeyword = TType | TNewtype | TData
 derive instance eqDeclKeyword :: Eq DeclKeyword
 derive instance ordDeclKeyword :: Ord DeclKeyword
@@ -115,11 +115,8 @@ instance showDeclKeyword :: Show DeclKeyword where
   show TData = "data"
 declKeyword :: DataType -> DeclKeyword
 declKeyword (TypeAlias _) = TType
-declKeyword (SumType m)
-  | [Tuple _ [_]] <- Map.toAscUnfoldable m
-    = TNewtype
-  | otherwise
-    = TData
+declKeyword (SumType [Tuple _ []]) = TNewtype
+declKeyword _ = TData
 type ATypeVR =
   ( name :: FProxy (Const (Qualified Proper))
   , var :: FProxy (Const Ident)

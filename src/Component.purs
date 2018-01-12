@@ -2,6 +2,7 @@ module Component where
 
 import Prelude
 
+import Combinators (aTypeName, aTypeVar)
 import Control.Alt ((<|>))
 import Control.Monad.Aff (Aff)
 import DOM (DOM)
@@ -16,10 +17,7 @@ import Data.Lens (ALens', Prism', Traversal', _1, _2, anyOf, cloneLens, iso, pre
 import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
 import Data.Lens.Suggestion (Lens', lens, suggest)
-import Data.Map (Map)
-import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Newtype (wrap)
 import Data.String (joinWith, singleton, uncons)
 import Data.String.CodePoints as Str
 import Data.String.Regex (split) as Re
@@ -36,8 +34,9 @@ import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
 import Halogen.HTML.Properties as HP
 import Reprinting (showAType, showDataType)
-import Types (ATypeV, DataType(..), DataTypeDecl, DataTypeDef(..), Proper(..), Qualified(..), TypeAbses, declKeyword)
+import Types (ATypeV, DataType(..), DataTypeDecl, DataTypeDef(..), Proper(..), Ident(..), Qualified(..), TypeAbses, TypeAbs(..), declKeyword)
 import Types as T
+import Prim.Repr (primKinds)
 
 type Query = HL.Query State
 
@@ -77,7 +76,7 @@ _typeAlias = prism' TypeAlias case _ of
   TypeAlias m -> Just m
   _ -> Nothing
 
-_sumType :: Prism' DataType (Map Proper (Array ATypeV))
+_sumType :: Prism' DataType (Array (Tuple Proper (Array ATypeV)))
 _sumType = prism' SumType case _ of
   SumType m -> Just m
   _ -> Nothing
@@ -85,7 +84,7 @@ _sumType = prism' SumType case _ of
 _typeAliasData :: Traversal' State ATypeV
 _typeAliasData = _typedata <<< _typeAlias
 
-_sumTypeData :: Traversal' State (Map Proper (Array ATypeV))
+_sumTypeData :: Traversal' State (Array (Tuple Proper (Array ATypeV)))
 _sumTypeData = _typedata <<< _sumType
 
 ccwords :: String -> Array String
@@ -121,14 +120,14 @@ emptyAlias = TypeAlias $ roll $ VF.inj T._name $ Const $ Unqualified $ Proper "_
 _isTypeAlias :: Lens' State Boolean
 _isTypeAlias = lens
   (anyOf _typeAliasData (const true))
-  (\s alias -> (_typedata .~ if alias then emptyAlias else SumType Map.empty) s)
+  (\s alias -> (_typedata .~ if alias then emptyAlias else SumType []) s)
 
 typeComponent :: forall p. State -> Element p
 typeComponent = HL.Checkbox.renderAsField "Simple type alias" _isTypeAlias
 
 component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
 component =
-  H.component
+  H.parentComponent
     { initialState: const initialState
     , render
     , eval
@@ -139,15 +138,24 @@ component =
   initialState :: State
   initialState =
     { description: "A data type definition"
-    , datatype: Tuple (Proper "DataTypeDef") $
-        DataTypeDef [] $
-          SumType $ Map.singleton (Proper "DataTypeDef")
-          [ roll $ VF.inj T._name $ wrap $ Unqualified $ Proper "TypeAbses"
-          , roll $ VF.inj T._name $ wrap $ Unqualified $ Proper "DataType"
-          ]
+    , datatype: Tuple (Proper "These") $
+        DataTypeDef
+          [ TypeAbs (Ident "left") (Just primKinds."Type")
+          , TypeAbs (Ident "right") (Just primKinds."Type")
+          ] $
+          SumType
+            [ Tuple (Proper "This")
+              [ aTypeVar $ Ident "left" ]
+            , Tuple (Proper "That")
+              [ aTypeVar $ Ident "right" ]
+            , Tuple (Proper "These")
+              [ aTypeVar $ Ident "left"
+              , aTypeVar $ Ident "right"
+              ]
+            ]
     }
 
-  render :: State -> H.ComponentHTML Query
+  render :: State -> H.ParentHTML Query (Const Void) Unit (Aff (dom :: DOM | eff))
   render state@{ description, datatype } =
     HH.div_
       [ HH.h1_
@@ -165,13 +173,13 @@ component =
       where
         renderedTypeAlias = preview _typeAliasData state <#>
           \atype -> HH.text $ showAType atype
-        renderedConstructors = preview _sumTypeData state <#> Map.toAscUnfoldable >>>
+        renderedConstructors = preview _sumTypeData state <#>
           \constructors -> HH.ol_ $ constructors <#> \(Tuple constructor args) ->
             HH.li_ $ append [HH.text $ show constructor] $ args <#> \arg ->
               HH.div_ [HH.text $ showAType arg]
 
 
-  eval :: Query ~> H.ComponentDSL State Query Void (Aff (dom :: DOM | eff))
+  eval :: Query ~> H.ParentDSL State Query (Const Void) Unit Void (Aff (dom :: DOM | eff))
   eval = HL.eval
 
 traversalDefault :: forall a b. b -> Traversal' a b -> Lens' a b

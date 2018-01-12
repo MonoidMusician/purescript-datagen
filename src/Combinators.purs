@@ -1,22 +1,27 @@
 module Combinators where
 
-import Prelude (class Functor, compose, pure, ($), (<@>))
 import Types
 
 import Control.Apply (lift2)
 import Data.Array (uncons, unsnoc)
 import Data.Const (Const(..))
-import Data.Functor.Mu (roll)
+import Data.Functor.Compose (Compose(..))
+import Data.Functor.Mu (Mu, roll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
-import Data.Map (insert, singleton) as Map
+import Data.Lens (Prism', prism')
+import Data.Map (insert) as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid (mempty)
+import Data.Newtype (un)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Pair (Pair(..))
 import Data.Symbol (class IsSymbol, SProxy)
+import Data.Traversable (class Traversable)
 import Data.Tuple (Tuple(..))
 import Data.Variant.Internal (FProxy)
+import Matryoshka (transAna, transCataM)
+import Prelude (class Functor, compose, pure, ($), (<<<), (<@>))
 
 onlyType :: Proper -> Import
 onlyType = Type <@> mempty
@@ -75,7 +80,7 @@ typeAbsType :: Ident -> TypeAbs
 typeAbsType = TypeAbs <@> Nothing
 
 newType :: Proper -> ATypeV -> DataTypeDef
-newType name typ = DataTypeDef mempty $ SumType $ Map.singleton name $ pure typ
+newType name typ = DataTypeDef mempty $ SumType [Tuple name $ pure typ]
 
 namedNewType :: Proper -> ATypeV -> Tuple Proper DataTypeDef
 namedNewType = lift2 compose Tuple newType
@@ -120,3 +125,6 @@ qualify (Tuple name (ImportModule mims mp)) is =
   Tuple name (ImportModule mims mp')
   where
     mp' = Map.insert (Module (lastOf name :| [])) is mp
+
+certainty :: forall f. Traversable f => Prism' (Mu (Compose Maybe f)) (Mu f)
+certainty = prism' (transAna (Compose <<< Just)) (transCataM (un Compose))

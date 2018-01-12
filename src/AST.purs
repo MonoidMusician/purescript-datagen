@@ -4,13 +4,14 @@ import Prelude
 
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
 import Autocomplete (customElemConf)
-import Combinators (aTypeApp, aTypeFunction, aTypeName, chainr)
+import Combinators (aTypeApp, aTypeFunction, aTypeName, certainty, chainr)
 import Control.Comonad (extract)
 import Control.Comonad.Env (EnvT(..))
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
+import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import DOM (DOM)
 import DOM.Event.KeyboardEvent (key)
 import DOM.Event.Types (KeyboardEvent)
@@ -26,11 +27,12 @@ import Data.Functor.Mu (roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lazy (force)
-import Data.Lens (Lens', modifying, (.=), (.~), (^.))
+import Data.Lens (Lens', is, modifying, use, (.=), (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
 import Data.Map (empty, toUnfoldable, union)
 import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
+import Data.Monoid (mempty)
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
@@ -53,13 +55,13 @@ import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
+import KindChecking (inferKindM, showKindError)
 import Matryoshka (class Recursive)
 import Network.HTTP.Affjax (AJAX, get)
 import Partial.Unsafe (unsafePartial)
 import Prim.Repr (primTypesMap)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC, showAKind)
-import KindChecking (inferKindM, showKindError)
 import Types (AKindV, ATypeV, ATypeVF, ATypeVM, ATypeVMF, Proper(..), Qualified(..), _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
@@ -67,7 +69,8 @@ import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, 
 type Suggestion = Tuple (Qualified Proper) AKindV
 
 data Query a
- = Lensy (HL.Query State a)
+ = Init a
+ | Lensy (HL.Query State a)
  | KeyPress KeyboardEvent a
  | FromAutocomplete (Autocomplete.Message Suggestion) a
 
@@ -183,25 +186,27 @@ navRight zipper = rightIsm (downRec zipper) #
             then navUp z
             else orGetParent (navUp z)
 
-component :: forall eff. H.Component HH.HTML Query TypeKindData Void (Aff (dom :: DOM | eff))
+component :: forall eff. H.Component HH.HTML Query (ZRec ATypeVM) (ZRec ATypeVM) (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
 component =
-  H.parentComponent
-    { initialState: initialState
+  H.lifecycleParentComponent
+    { initialState
     , render
     , eval
     , receiver: const Nothing
+    , initializer: Just (Init unit)
+    , finalizer: Nothing
     }
   where
 
-  initialState :: TypeKindData -> State
-  initialState =
-    { typ: tipRec hole
+  initialState :: ZRec ATypeVM -> State
+  initialState typ =
+    { typ
     , imput: "Type here"
     , unicode: true
-    , types: _
+    , types: mempty
     }
 
-  render :: State -> H.ParentHTML Query (Autocomplete.Query Suggestion) Slot (Aff (dom :: DOM | eff))
+  render :: State -> H.ParentHTML Query (Autocomplete.Query Suggestion) Slot (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
   render state@{ typ, unicode: u, types: items } =
     HH.div
       [ HE.onKeyUp (HE.input KeyPress)
@@ -215,6 +220,7 @@ component =
       , renderFocus u typ
       , HH.h2_ [ HH.text "Complete:" ]
       , renderFocus u (nil :<<~: topRec typ)
+      , HH.p_ [ HH.text "Is complete: ", HH.text if is certainty (topRec typ) then "Complete" else "Has a hole" ]
       , HH.h2_ [ HH.text "Kinds:" ]
       , renderKind (typ ^. _focusRec)
       , HH.br_
@@ -268,7 +274,10 @@ component =
           Right k -> HH.text $ showAKind k
 
 
-  eval :: Query ~> H.ParentDSL State Query (Autocomplete.Query Suggestion) Slot Void (Aff (dom :: DOM | eff))
+  eval :: Query ~> H.ParentDSL State Query (Autocomplete.Query Suggestion) Slot (ZRec ATypeVM) (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
+  eval (Init a) = a <$ do
+    tys <- H.lift ask
+    H.modify _ { types = tys }
   eval (Lensy q) = HL.eval q
   eval (KeyPress e a) = a <$ do
     H.liftEff $ unsafeCoerceEff $ log $ unsafeCoerce e
@@ -283,6 +292,7 @@ component =
     (_typ <<< _focusRec) .= roll (Compose $ Just $ VF.inj _name $ Const q)
     _ <- H.query unit (Autocomplete.Input "" unit)
     _ <- H.query unit (Autocomplete.Close (Autocomplete.CuzSelect (show q)) unit)
+    use _typ >>= H.raise
     pure a
 
 renderZipper :: forall p. Boolean -> ZRec ATypeVM -> Element p
@@ -387,4 +397,4 @@ main = runHalogenAff do
   let typesUrl = replace (Pattern "ast.html") (Replacement "types.json") url
   typeData <- get typesUrl <#> _.response
   let types = unsafePartial fromRight (decode codecTypeKindData typeData)
-  runUI component (union types primTypesMap) body
+  runUI (H.hoist (runReaderT <@> union types primTypesMap) component) (tipRec hole) body

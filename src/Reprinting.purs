@@ -232,7 +232,7 @@ delta old new = Additive $ ((-) `on` unwrap) new old
 showDataType :: DataType -> String
 showDataType (TypeAlias t) = showAType t
 showDataType (SumType m) = joinWith " | " $
-  Map.toAscUnfoldable m <#> \(Tuple c ts) ->
+  m <#> \(Tuple c ts) ->
     show c <> joinWithIfNE " " (showAType' (Just FnAppParen)) ts
 
 showDataTypeDecls :: DataTypeDecls -> String

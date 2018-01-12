@@ -52,13 +52,13 @@ thisModule =
     [ Proper "Module" `namedNewType`
         chainl aTypeApp (Unqualified <<< Proper <$> "NonEmpty" :| ["Array", "Proper"])
     , Tuple (Proper "Qualified") $ DataTypeDef [typeAbsType $ Ident "a"] $
-        SumType $ Map.fromFoldable
-        [ Tuple (Proper "Qualified")
-          [ atnunqp "Module"
-          , aTypeVar $ Ident "a"
+        SumType
+          [ Tuple (Proper "Qualified")
+            [ atnunqp "Module"
+            , aTypeVar $ Ident "a"
+            ]
+          , Tuple (Proper "Unqualified") $ pure $ aTypeVar $ Ident "a"
           ]
-        , Tuple (Proper "Unqualified") $ pure $ aTypeVar $ Ident "a"
-        ]
     , Proper "Proper" `namedNewType` aTypeName (Unqualified $ Proper "String")
     , Proper "Ident" `namedNewType` aTypeName (Unqualified $ Proper "String")
     , Proper "Op" `namedNewType` aTypeName (Unqualified $ Proper "String")
@@ -69,10 +69,12 @@ thisModule =
     , Proper "ImportModules" `alias`
       ( Unqualified <<< Proper <$> "Map" :| ["Module", "ImportModule"] )
     , Tuple (Proper "ImportModule") $ DataTypeDef mempty $
-        SumType $ Map.singleton (Proper "ImportModule") $
-        [ aTypeApp (atnunqp "Maybe") $ atnunqp "Imports"
-        , chainl aTypeApp (Unqualified <<< Proper <$> "Map" :| ["Module", "Imports"])
-        ]
+        SumType
+          [ Tuple (Proper "ImportModule")
+            [ aTypeApp (atnunqp "Maybe") $ atnunqp "Imports"
+            , chainl aTypeApp (Unqualified <<< Proper <$> "Map" :| ["Module", "Imports"])
+            ]
+          ]
     , Tuple (Proper "FUNCTION") $ DataTypeDef mempty $
         TypeAlias $
           testType

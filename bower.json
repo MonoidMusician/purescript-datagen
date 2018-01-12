@@ -24,12 +24,16 @@
     "purescript-either": "^3.1.0",
     "purescript-codec-argonaut": "^4.0.0",
     "purescript-maps": "^3.5.0",
-    "purescript-affjax": "5.0.0"
+    "purescript-affjax": "5.0.0",
+    "purescript-halogen-textcursor": "MonoidMusician/purescript-halogen-textcursor",
+    "purescript-halogen-zuruzuru": "MonoidMusician/purescript-halogen-zuruzuru"
   },
   "devDependencies": {
     "purescript-node-fs": "^4.0.0"
   },
   "resolutions": {
-    "purescript-halogen-autocomplete": "master"
+    "purescript-halogen-autocomplete": "master",
+    "purescript-variant": "foldable-traversable",
+    "purescript-record": "^0.2.0"
   }
 }
