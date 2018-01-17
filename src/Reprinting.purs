@@ -7,14 +7,15 @@ import Control.Comonad.Cofree (Cofree, head, (:<))
 import Control.Comonad.Env (EnvT(..))
 import Control.Monad.State (State, gets, modify, runState)
 import Data.Bifunctor (lmap, rmap)
-import Data.Const (Const)
+import Data.Const (Const(..))
 import Data.Function (on)
+import Data.Functor.Compose (Compose(..))
 import Data.Functor.Variant (VariantF)
 import Data.Functor.Variant as VF
 import Data.Identity (Identity(..))
 import Data.List.Lazy as List
 import Data.Map (toAscUnfoldable) as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (class Monoid, mempty)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (un, unwrap)
@@ -28,7 +29,7 @@ import Data.Variant.Internal (FProxy)
 import Matryoshka (class Recursive, Algebra)
 import Printing (joinWithIfNE)
 import Recursion (Alg, modifyHead, rewrap, whileAnnotatingDown)
-import Types (AKindVF, ATypeV, ATypeVF, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, TypeAbs(..), _app, _fun, _name, _row, _var, declKeyword, showImportModules)
+import Types (AKindVF, ATypeV, ATypeVF, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, TypeAbs(..), AKindVMF, _app, _fun, _name, _row, _var, declKeyword, showImportModules)
 import Zippers (class Diff1, DF, ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
 
 -- | A tag consists of the following:
@@ -146,6 +147,24 @@ showTaggedK1P p = VF.match
       | pred p    = tag $ literal "(" *> v <* literal ")"
       | otherwise = tag v
 
+showTaggedK1PM :: Maybe Annot -> Algebra AKindVMF (Tuple String (Untagged AKindVMF))
+showTaggedK1PM p = un Compose >>> (maybe (tag (literal "_" $> Compose Nothing)) $ VF.match
+  { name: \(Const n) -> tag (literal (show n) $> Compose (Just $ VF.inj _name (Const n)))
+  , fun: \(Pair l r) -> wrapTagIf mayNeedFnParen do
+      a <- recur l
+      literal " -> "
+      b <- recur r
+      pure (Compose $ Just $ VF.inj _fun (Pair a b))
+  , row: \(Identity kind) -> wrapTagIf mayNeedAppParen do
+      literal "# "
+      k <- recur kind
+      pure (Compose $ Just $ VF.inj _row (Identity k))
+  })
+  where
+    wrapTagIf pred v
+      | pred p    = tag $ literal "(" *> v <* literal ")"
+      | otherwise = tag v
+
 annotPrecK :: forall a. AKindVF a -> AKindVF (Tuple Annot a)
 annotPrecK = VF.match
   { name: VF.inj _name <<< rewrap
@@ -168,6 +187,22 @@ showAKind = showTaggedK >>> fst
 showAKind' :: forall t. Recursive t AKindVF =>
   Maybe Annot -> t -> String
 showAKind' ann = showTaggedK' ann >>> fst
+
+showTaggedKM :: forall t. Recursive t AKindVMF =>
+  t -> Tuple String (Untagged AKindVMF)
+showTaggedKM = whileAnnotatingDown Nothing (unwrap >>> map annotPrecK >>> Compose) showTaggedK1PM
+
+showTaggedKM' :: forall t. Recursive t AKindVMF =>
+  Maybe Annot -> t -> Tuple String (Untagged AKindVMF)
+showTaggedKM' ann = whileAnnotatingDown ann (unwrap >>> map annotPrecK >>> Compose) showTaggedK1PM
+
+showAKindM :: forall t. Recursive t AKindVMF =>
+  t -> String
+showAKindM = showTaggedKM >>> fst
+
+showAKindM' :: forall t. Recursive t AKindVMF =>
+  Maybe Annot -> t -> String
+showAKindM' ann = showTaggedKM' ann >>> fst
 
 evalFrom :: forall m. Spliceable m =>
   Additive Int -> Tuple m (Untagged ATypeVF) -> Tuple m ATypeVC

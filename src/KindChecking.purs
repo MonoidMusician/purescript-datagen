@@ -2,15 +2,21 @@ module KindChecking where
 
 import Prelude
 
+import Combinators (certainty)
+import Control.Comonad (extract)
 import Data.Bifunctor (lmap)
 import Data.Const (Const(..))
-import Data.Either (Either(..), note)
+import Data.Either (Either(..), hush, note)
 import Data.Eq (class Eq1)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu(In), roll, transMu, unroll)
+import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Functor.Variant as VF
+import Data.Identity (Identity(..))
+import Data.Lens (review)
+import Data.List.Lazy (uncons)
 import Data.Map (Map, lookup)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, un, unwrap)
@@ -21,7 +27,8 @@ import Externs.Codec.TypeData (TypeKindData)
 import Matryoshka (cata)
 import Prim.Repr (primKinds)
 import Reprinting (showAKind)
-import Types (AKindV, AKindVF, ATypeV, Ident, Proper, Qualified, ATypeVM, _app, _fun, _name, _row, _var)
+import Types (AKindV, AKindVF, ATypeV, ATypeVM, Ident, Proper, Qualified, AKindVM, _app, _fun, _name, _row, _var)
+import Zippers (ParentCtxs, fromDF, fromParentCtx)
 
 type Kinded = Tuple ATypeV AKindV
 newtype KindChecked = KindChecked Kinded
@@ -138,6 +145,54 @@ inferKindM t env = lmap (whileInferring t) $
   # maybe (Left typeHole)
   )
   (un Compose $ unroll t)
+
+-- | Todo: emit partial kinds
+inferKindHole :: ParentCtxs ATypeVM -> AllTypeKindData -> AKindVM
+inferKindHole pars env = uncons pars # maybe hole \{ head: par, tail: pars' } ->
+  ( VF.case_
+  # VF.on _name (un Const >>> absurd)
+  # VF.on _var (un Const >>> absurd)
+  # VF.on _app case _ of
+      Tuple false r ->
+        let
+          from = inferKindMM r env
+          to = inferKindHole pars' env
+        in roll $ Compose $ Just $ VF.inj _fun $ Pair from to
+      Tuple true l ->
+        inferKindMM l env # unroll >>> un Compose >>>
+          ( VF.default hole
+          # VF.on _fun (\(Pair from _) -> from)
+          # maybe hole
+          )
+  # VF.on _fun (pure (review certainty primKinds."Type"))
+  ) (extract $ un Product $ fromDF $ fromParentCtx par)
+  where
+    hole = roll $ Compose Nothing
+    inferKindMM :: ATypeVM -> AllTypeKindData -> AKindVM
+    inferKindMM t env = case hush (inferKindM t env) of
+      Nothing -> hole
+      Just k -> review certainty k
+
+matchPartialKind :: AKindVM -> AKindV -> Boolean
+matchPartialKind (In (Compose Nothing)) _ = true
+matchPartialKind (In (Compose (Just k))) (In k') =
+  ( VF.case_
+  # VF.on _name (
+    \(Const q) ->
+      ( VF.default false
+      # VF.on _name (eq q <<< unwrap)
+      ) k')
+  # VF.on _row (
+    \(Identity r) ->
+      ( VF.default false
+      # VF.on _row (matchPartialKind r <<< unwrap)
+      ) k')
+  # VF.on _fun \(Pair l r) ->
+    ( VF.default false
+    # VF.on _fun \(Pair x y) ->
+        matchPartialKind l x && matchPartialKind r y
+    ) k'
+  ) k
 
 vfEqCase ::
   forall sym fnc v' v v1' v1 a.

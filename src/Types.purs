@@ -142,6 +142,8 @@ type AKindVR =
   )
 type AKindVF = VariantF AKindVR
 type AKindV = Mu AKindVF
+type AKindVMF = Compose Maybe AKindVF
+type AKindVM = Mu AKindVMF
 
 type TypeAbses = Array TypeAbs
 data TypeAbs = TypeAbs Ident (Maybe AKindV)

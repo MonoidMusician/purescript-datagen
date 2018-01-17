@@ -12,15 +12,17 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
+import Control.MonadZero (guard)
 import DOM (DOM)
 import DOM.Event.KeyboardEvent (key)
 import DOM.Event.Types (KeyboardEvent)
 import DOM.HTML (window)
 import DOM.HTML.Location (href)
 import DOM.HTML.Window (location)
+import Data.Array (mapMaybe)
 import Data.Codec (decode)
 import Data.Const (Const(..))
-import Data.Either (Either(..), fromRight)
+import Data.Either (Either(..), fromRight, hush)
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (roll, unroll)
@@ -55,18 +57,22 @@ import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
-import KindChecking (inferKindM, showKindError)
+import KindChecking (inferKindHole, inferKindM, matchPartialKind, showKindError)
 import Matryoshka (class Recursive)
 import Network.HTTP.Affjax (AJAX, get)
 import Partial.Unsafe (unsafePartial)
 import Prim.Repr (primTypesMap)
 import Recursion (rewrap, whileAnnotatingDown)
-import Reprinting (ATypeVC, showAKind)
+import Reprinting (ATypeVC, showAKind, showAKindM)
 import Types (AKindV, ATypeV, ATypeVF, ATypeVM, ATypeVMF, Proper(..), Qualified(..), _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
 import Zippers (DF, ParentCtx, ParentCtxs, ZRec, _focusRec, downF, downIntoRec, downRec, fromDF, fromParentCtx, liftDF, tipRec, toDF, toParentCtx, topRec, upF, upRec, (:<-:), (:<<~:))
 
-type Suggestion = Tuple (Qualified Proper) AKindV
+type Suggestion =
+  { expr :: ATypeVM
+  , name :: Qualified Proper
+  , kind :: AKindV
+  }
 
 data Query a
  = Init a
@@ -207,11 +213,11 @@ component =
     }
 
   render :: State -> H.ParentHTML Query (Autocomplete.Query Suggestion) Slot (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
-  render state@{ typ, unicode: u, types: items } =
+  render state@{ typ: typ@(pars :<<~: _), unicode: u, types: items } =
     HH.div
       [ HE.onKeyUp (HE.input KeyPress)
       , HP.tabIndex 0
-      ]
+      ] $
       [ HH.h1_ [ HH.text "AST Edit PureScript Type" ]
       , Lensy <$> HL.Checkbox.renderAsField "Use unicode" (prop (SProxy :: SProxy "unicode")) state
       , HH.h2_ [ HH.text "Inline zipper:" ]
@@ -222,13 +228,14 @@ component =
       , renderFocus u (nil :<<~: topRec typ)
       , HH.p_ [ HH.text "Is complete: ", HH.text if is certainty (topRec typ) then "Complete" else "Has a hole" ]
       , HH.h2_ [ HH.text "Kinds:" ]
-      , renderKind (typ ^. _focusRec)
+      , HH.text "At focus: ", renderKind (typ ^. _focusRec)
+      , HH.br_, HH.text "Required kind: ", HH.text (showAKindM requiredKind)
       , HH.br_
-      , renderKind (topRec typ)
+      , HH.text "Overall: ", renderKind (topRec typ)
       , HH.div_ -- editing
         [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
-        , HH.slot unit (Autocomplete.component customElemConf) (toUnfoldable items) (HE.input FromAutocomplete)
+        , HH.slot unit (Autocomplete.component customElemConf) filtered (HE.input FromAutocomplete)
         , Lensy <$> HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
         , Lensy <$> HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
         , HH.div_ functions
@@ -242,6 +249,23 @@ component =
         ]
       ]
       where
+        -- | Todo: prevent partial application of type synonyms
+        requiredKind = inferKindHole pars (Tuple items empty)
+        currentKind = hush $ inferKindM (typ ^. _focusRec) (Tuple items empty)
+        matches = matchPartialKind requiredKind
+        hasRightKind (Tuple q itskind) = go e1 itskind
+          where
+            e1 = roll $ Compose $ Just $ VF.inj _name $ Const q
+            step e = roll $ Compose $ Just $ VF.inj _app $ Pair e hole
+            go e k =
+              if matches k
+                then Just { expr: e, name: q, kind: itskind }
+                else
+                  ( VF.default Nothing
+                  # VF.on _fun (\(Pair _ k') -> go (step e) k')
+                  ) (unroll k)
+        filtered = mapMaybe hasRightKind $ toUnfoldable items
+
         unsafeName q name = VF.inj _name $ Const $ q $ Proper name
         branching :: (DF Pair ~> DF ATypeVF) -> Boolean -> ATypeVM -> ParentCtx ATypeVM
         branching inj side other =
@@ -266,9 +290,10 @@ component =
             [ HL.Button.renderAsField "Type application" (app false) false
             ]
           else
-            [ HL.Button.renderAsField "Make it a parameter" (app false) false
-            , HL.Button.renderAsField "Give it a parameter" (app true) false
-            ]
+            let takesParam = (VF.default false # VF.on _fun (pure true) # maybe true) (unroll <$> currentKind) in
+            [ [ HL.Button.renderAsField "Make it a parameter" (app false) false ]
+            , guard takesParam $> HL.Button.renderAsField "Give it a parameter" (app true) false
+            ] # fold
         renderKind t = case inferKindM t (Tuple items empty) of
           Left err -> HH.text $ showKindError (renderStr true) err
           Right k -> HH.text $ showAKind k
@@ -288,8 +313,8 @@ component =
       "ArrowRight" -> navRight
       _ -> id
   eval (FromAutocomplete (Changed s) a) = pure a
-  eval (FromAutocomplete (Selected (Tuple q k)) a) = do
-    (_typ <<< _focusRec) .= roll (Compose $ Just $ VF.inj _name $ Const q)
+  eval (FromAutocomplete (Selected { expr, name: q }) a) = do
+    (_typ <<< _focusRec) .= expr
     _ <- H.query unit (Autocomplete.Input "" unit)
     _ <- H.query unit (Autocomplete.Close (Autocomplete.CuzSelect (show q)) unit)
     use _typ >>= H.raise
