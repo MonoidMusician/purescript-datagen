@@ -14,8 +14,9 @@ import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.MonadZero (guard)
 import DOM (DOM)
+import DOM.Event.Event (stopPropagation)
 import DOM.Event.KeyboardEvent (key)
-import DOM.Event.Types (KeyboardEvent)
+import DOM.Event.Types (Event, KeyboardEvent, mouseEventToEvent)
 import DOM.HTML (window)
 import DOM.HTML.Location (href)
 import DOM.HTML.Window (location)
@@ -79,6 +80,7 @@ data Query a
  | Lensy (HL.Query State a)
  | KeyPress KeyboardEvent a
  | FromAutocomplete (Autocomplete.Message Suggestion) a
+ | StopPropagation Event (Query a)
 
 type Element p = H.HTML p Query
 type Slot = Unit
@@ -319,6 +321,9 @@ component =
     _ <- H.query unit (Autocomplete.Close (Autocomplete.CuzSelect (show q)) unit)
     use _typ >>= H.raise
     pure a
+  eval (StopPropagation e q) = do
+    H.liftEff $ stopPropagation e
+    eval q
 
 renderZipper :: forall p. Boolean -> ZRec ATypeVM -> Element p
 renderZipper u zipper =
@@ -354,7 +359,7 @@ renderZipper u zipper =
 
 addEvent :: forall p. ZRec ATypeVM -> String -> Element p
 addEvent z = HH.span
-  [ HE.onClick (HE.input_ $ Lensy <<< HL.UpdateState (pure $ _typ .~ z))
+  [ HE.onClick (HE.input \e -> StopPropagation (mouseEventToEvent e) <<< Lensy <<< HL.UpdateState (pure $ _typ .~ z))
   , HP.class_ $ wrap "clickable"
   , HP.title $ renderStr true $ z ^. _focusRec
   ] <<< pure <<< HH.text
