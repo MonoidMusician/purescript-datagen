@@ -27,7 +27,7 @@ import Data.Pair (Pair(..))
 import Data.StrMap (StrMap)
 import Data.StrMap as StrMap
 import Data.Symbol (class IsSymbol, SProxy(..))
-import Data.Tuple (Tuple(..), fst)
+import Data.Tuple (Tuple(..), fst, uncurry)
 import Data.Variant.Internal (FProxy(..), RLProxy(..))
 import Matryoshka (class Corecursive, class Recursive, Algebra, cata, embed, project)
 import Recursion (Alg)
@@ -217,8 +217,8 @@ instance deriveofVariant_isVariantOfDerivatives ::
   , DiffVariantF r r' rl rl'
   , ListToRow rl' r'
   ) => Diff1 (VariantF r) (VariantF r') where
-  downF = unsafeCoerce (downV (RLProxy :: RLProxy rl))
-  upF = unsafeCoerce (upV (RLProxy :: RLProxy rl))
+  downF = map (uncurry ZF <<< lmap (map toDF)) <<< downV (RLProxy :: RLProxy rl)
+  upF (v :<-: x) = upV (RLProxy :: RLProxy rl) (Tuple (map fromDF v) x)
 
 type VF r' a = Tuple (Lazy (VariantF r' a)) a
 

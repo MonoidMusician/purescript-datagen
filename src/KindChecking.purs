@@ -2,33 +2,34 @@ module KindChecking where
 
 import Prelude
 
-import Combinators (certainty)
+import Combinators (fear)
 import Control.Comonad (extract)
-import Data.Bifunctor (lmap)
+import Control.Monad.State (State, evalState, get, modify)
+import Control.Plus (empty)
 import Data.Const (Const(..))
-import Data.Either (Either(..), hush, note)
 import Data.Eq (class Eq1)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
-import Data.Functor.Mu (Mu(In), roll, transMu, unroll)
+import Data.Functor.Mu (Mu(In), transMu)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Functor.Variant as VF
 import Data.Identity (Identity(..))
-import Data.Lens (review)
 import Data.List.Lazy (uncons)
-import Data.Map (Map, lookup)
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, un, unwrap)
 import Data.Pair (Pair(..))
 import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, snd)
 import Externs.Codec.TypeData (TypeKindData)
-import Matryoshka (cata)
+import Matryoshka (class Corecursive, cata, embed, project)
 import Prim.Repr (primKinds)
 import Reprinting (showAKind)
-import Types (AKindV, AKindVF, ATypeV, ATypeVM, Ident, Proper, Qualified, AKindVM, _app, _fun, _name, _row, _var)
+import Types (AKindV, AKindVF, AKindVM, AKindVR, ATypeV, ATypeVM, Ident, Proper, Qualified, _fun, _name, _row)
 import Zippers (ParentCtxs, fromDF, fromParentCtx)
+import Complex.Validation as CV
 
 type Kinded = Tuple ATypeV AKindV
 newtype KindChecked = KindChecked Kinded
@@ -40,36 +41,37 @@ derive instance newtypeKindCheckedM :: Newtype KindCheckedM _
 
 type AllTypeKindData = Tuple TypeKindData (Map Ident AKindV)
 
+type Hm = Tuple (forall e. e) Unit
+type CONST a = FProxy (Const a)
+type TUPLE a = FProxy (Tuple a)
 type KindErrorVRBase t k r =
-  ( unknownName :: FProxy (Const (Qualified Proper))
-  , unknownVar  :: FProxy (Const Ident)
-  , doesNotMatch :: FProxy (Const (Tuple k k))
-  , needsFunctor :: FProxy (Const (Tuple t k))
-  , whileInferring :: FProxy (Tuple t)
-  , whileChecking  :: FProxy (Tuple (Tuple t k))
+  ( unknownName :: CONST (Qualified Proper)
+  , unknownVar  :: CONST Ident
+  , doesNotMatch :: CONST (Tuple k k)
+  , needsFunctor :: CONST (Tuple t k)
+  , whileInferring :: TUPLE t
+  , whileChecking  :: TUPLE (Tuple t k)
   | r )
 type KindErrorVFBase t k r = VariantF (KindErrorVRBase t k r)
 type KindErrorVBase t k r = Mu (KindErrorVFBase t k r)
 
 type KindError t k = KindErrorVBase t k ()
-type KindErrorM t k = KindErrorVBase t k ( typeHole :: FProxy (Const Unit) )
+type ComputeKind t k = CV.ERrors (KindErrorVRBase t k ())
 
 unknownName :: forall t k r. Qualified Proper -> KindErrorVBase t k r
-unknownName = roll <<< VF.inj (SProxy :: SProxy "unknownName") <<< Const
+unknownName = embed <<< VF.inj (SProxy :: SProxy "unknownName") <<< Const
 unknownVar :: forall t k r. Ident -> KindErrorVBase t k r
-unknownVar = roll <<< VF.inj (SProxy :: SProxy "unknownVar") <<< Const
+unknownVar = embed <<< VF.inj (SProxy :: SProxy "unknownVar") <<< Const
 doesNotMatch :: forall t k r. k -> k -> KindErrorVBase t k r
-doesNotMatch k1 k2 = roll $ VF.inj (SProxy :: SProxy "doesNotMatch") $ Const $ Tuple k1 k2
+doesNotMatch k1 k2 = embed $ VF.inj (SProxy :: SProxy "doesNotMatch") $ Const $ Tuple k1 k2
 needsFunctor :: forall t k r. t -> k -> KindErrorVBase t k r
-needsFunctor t k = roll $ VF.inj (SProxy :: SProxy "needsFunctor") $ Const $ Tuple t k
+needsFunctor t k = embed $ VF.inj (SProxy :: SProxy "needsFunctor") $ Const $ Tuple t k
 whileInferring :: forall t k r. t -> KindErrorVBase t k r -> KindErrorVBase t k r
-whileInferring t e = roll $ VF.inj (SProxy :: SProxy "whileInferring") $ Tuple t e
+whileInferring t e = embed $ VF.inj (SProxy :: SProxy "whileInferring") $ Tuple t e
 whileChecking :: forall t k r. t -> k -> KindErrorVBase t k r -> KindErrorVBase t k r
-whileChecking t k e = roll $ VF.inj (SProxy :: SProxy "whileChecking") $ Tuple (Tuple t k) e
-typeHole :: forall t k r. KindErrorVBase t k ( typeHole :: FProxy (Const Unit) | r )
-typeHole = roll $ VF.inj (SProxy :: SProxy "typeHole") $ Const unit
+whileChecking t k e = embed $ VF.inj (SProxy :: SProxy "whileChecking") $ Tuple (Tuple t k) e
 
-showKindError :: forall t. (t -> String) -> KindErrorM t AKindV -> String
+showKindError :: forall t. (t -> String) -> KindError t AKindV -> String
 showKindError showt = cata $ VF.case_
   # VF.on (SProxy :: SProxy "unknownName")
     (un Const >>> \q -> "Unknown name " <> show q)
@@ -83,95 +85,143 @@ showKindError showt = cata $ VF.case_
     (\(Tuple t e) -> "An error occurred while inferring the kind of " <> showt t <> ": " <> e)
   # VF.on (SProxy :: SProxy "whileChecking")
     (\(Tuple (Tuple t k) e) -> "An error occurred while checking that " <> showt t <> " has kind " <> showAKind k <> ": " <> e)
-  # VF.on (SProxy :: SProxy "typeHole")
-    (\_ -> "Type hole has no discernable kind")
+
+emjJ ::
+  forall t f s r r'.
+    IsSymbol s =>
+    RowCons s (FProxy f) r' r =>
+    Functor f =>
+    Corecursive t (Compose Maybe (VariantF r)) =>
+  SProxy s -> f t -> t
+emjJ s = embed <<< Compose <<< Just <<< VF.inj s
+
+hole :: forall t f. Corecursive t (Compose Maybe f) => t
+hole = embed (Compose Nothing)
+
+extractCase ::
+  forall s f v' v a r.
+    IsSymbol s =>
+    RowCons s (FProxy f) v' v =>
+  SProxy s -> VariantF v a -> r -> (f a -> r) -> r
+extractCase label value df handle =
+  VF.on label handle (const df) value
+
+extractCaseIn ::
+  forall s f v' v a r.
+    IsSymbol s =>
+    RowCons s (FProxy f) v' v =>
+  SProxy s -> Mu (VariantF v) -> r -> (f (Mu (VariantF v)) -> r) -> r
+extractCaseIn label value df handle =
+  extractCase label (project value) df handle
+
+requireCaseIn ::
+  forall s f v' v e t es' es a a.
+    IsSymbol s =>
+    RowCons s (FProxy f) v' v =>
+    IsSymbol e =>
+    RowCons e (FProxy (Const t)) es' es =>
+  Mu (VariantF v) -> SProxy s ->
+  SProxy e -> t ->
+  (f (Mu (VariantF v)) -> a) ->
+  CV.ERrors es a
+requireCaseIn value label errL errV handle =
+  extractCaseIn label value (CV.errorSimple errL errV) (pure <<< handle)
 
 -- | Check that `t` has kind `k` in the given environment.
-kindCheck :: Kinded -> AllTypeKindData -> Either (KindError ATypeV AKindV) KindChecked
-kindCheck (Tuple t k) env = lmap (whileChecking t k) $
-  inferKind t env >>= (matchKind (KindChecked (Tuple t k)) <@> k)
+kindCheck :: Kinded -> AllTypeKindData -> ComputeKind ATypeV AKindV KindChecked
+kindCheck (Tuple t k) env = CV.errorScoped (SProxy :: SProxy "whileChecking") (Tuple t k) $
+  inferKind t env >>= \k' -> KindChecked (Tuple t k) <$ matchKind k' k
 -- | Infer the kind of `t` in the given environment
-inferKind :: ATypeV -> AllTypeKindData -> Either (KindError ATypeV AKindV) AKindV
-inferKind t env = lmap (whileInferring t) $
-  ( VF.case_
-  # VF.on _name
-    (un Const >>> \q -> lookup q (fst env) # note (unknownName q))
-  # VF.on _app
-    (\(Pair fnc arg) -> do
-      karg <- inferKind arg env
-      kfnc <- inferKind fnc env
-      (VF.on _fun \(Pair ka kr) -> matchKind kr karg ka)
-        (VF.default (Left $ needsFunctor fnc kfnc))
-        (unroll kfnc)
-    )
-  # VF.on _fun
-    (\(Pair arg res) -> do
-      _ <- kindCheck (Tuple arg primKinds."Type") env
-      _ <- kindCheck (Tuple res primKinds."Type") env
-      pure primKinds."Type"
-    )
-  # VF.on _var
-    (un Const >>> \v -> lookup v (snd env) # note (unknownVar v))
-  ) $ unroll t
+inferKind :: ATypeV -> AllTypeKindData -> ComputeKind ATypeV AKindV AKindV
+inferKind t env = CV.errorScoped (SProxy :: SProxy "whileInferring") t $
+  VF.match
+    { name:
+        un Const >>> \(q :: Qualified Proper) ->
+          CV.note (unknownName q) $
+            Map.lookup q (fst env)
+    , var:
+        un Const >>> \(v :: Ident) ->
+          CV.note (unknownVar v) $
+            Map.lookup v (snd env)
+    , app: \(Pair fnc arg) -> do
+        -- infer the kinds of the functor and argument independently
+        Tuple kfnc karg <- Tuple <$> inferKind fnc env <*> inferKind arg env
+        -- make sure the functor has a fun kind
+        join $ requireCaseIn kfnc _fun
+          -- if not, emit the needsFunctor error
+          (SProxy :: SProxy "needsFunctor") (Tuple fnc kfnc)
+          -- but if its kind is of the form (a -> r), make sure a matches the
+          -- kind of the argument, then return the resultant kind `r`.
+          \(Pair ka kr) -> kr <$ matchKind karg ka
+    , fun: \(Pair arg res) ->
+        -- a function is of kind Type, given two arguments of kind Type
+        primKinds."Type"
+        <$ kindCheck (Tuple arg primKinds."Type") env
+        <* kindCheck (Tuple res primKinds."Type") env
+    } $ project t
 
 -- | Check that `t` has kind `k` in the given environment.
-kindCheckM :: KindedM -> AllTypeKindData -> Either (KindErrorM ATypeVM AKindV) KindCheckedM
-kindCheckM (Tuple t k) _ | In (Compose Nothing) <- t =
-  Right (KindCheckedM (Tuple t k))
-kindCheckM (Tuple t k) env = lmap (whileChecking t k) $
-  inferKindM t env >>= (matchKind (KindCheckedM (Tuple t k)) <@> k)
--- | Infer the kind of `t` in the given environment
-inferKindM :: ATypeVM -> AllTypeKindData -> Either (KindErrorM ATypeVM AKindV) AKindV
-inferKindM t env = lmap (whileInferring t) $
-  ( VF.case_
-  # VF.on _name
-    (un Const >>> \q -> lookup q (fst env) # note (unknownName q))
-  # VF.on _app
-    (\(Pair fnc arg) -> do
-      karg <- inferKindM arg env
-      kfnc <- inferKindM fnc env
-      (VF.on _fun \(Pair ka kr) -> matchKind kr karg ka)
-        (VF.default (Left $ needsFunctor fnc kfnc))
-        (unroll kfnc)
-    )
-  # VF.on _fun
-    (\(Pair arg res) -> do
-      _ <- kindCheckM (Tuple arg primKinds."Type") env
-      _ <- kindCheckM (Tuple res primKinds."Type") env
-      pure primKinds."Type"
-    )
-  # VF.on _var
-    (un Const >>> \v -> lookup v (snd env) # note (unknownVar v))
-  # maybe (Left typeHole)
-  )
-  (un Compose $ unroll t)
+kindCheckM :: KindedM -> AllTypeKindData -> ComputeKind ATypeVM AKindV KindCheckedM
+kindCheckM (Tuple t k) env = CV.errorScoped (SProxy :: SProxy "whileChecking") (Tuple t k) $
+  inferKindM t env >>= case _ of
+    Nothing -> KindCheckedM (Tuple t k) # pure
+    Just k' -> KindCheckedM (Tuple t k) <$ matchKind k' k
+-- | Infer the kind of the partial expression `t` in the given environment.
+-- | Returns `Nothing` if the kind is unconstrained (i.e. may be anything).
+inferKindM :: ATypeVM -> AllTypeKindData -> ComputeKind ATypeVM AKindV (Maybe AKindV)
+inferKindM t env = CV.errorScoped (SProxy :: SProxy "whileInferring") t $
+  (VF.match
+    { name: map pure <<<
+        un Const >>> \(q :: Qualified Proper) ->
+          CV.note (unknownName q) $
+            Map.lookup q (fst env)
+    , var: map pure <<<
+        un Const >>> \(v :: Ident) ->
+          CV.note (unknownVar v) $
+            Map.lookup v (snd env)
+    , app: \(Pair fnc arg) -> do
+        Tuple kfnc karg <- Tuple <$> inferKindM fnc env <*> inferKindM arg env
+        case kfnc of
+          Nothing -> pure Nothing
+          Just kfnc' ->
+            join $ requireCaseIn kfnc' _fun
+              (SProxy :: SProxy "needsFunctor") (Tuple fnc kfnc')
+              \(Pair ka kr) ->
+                case karg of
+                  Nothing -> pure (pure kr)
+                  Just karg' -> pure kr <$ matchKind karg' ka
+    , fun: \(Pair arg res) ->
+        -- a function is of kind Type, given two arguments of kind Type
+        pure primKinds."Type"
+        <$ kindCheckM (Tuple arg primKinds."Type") env
+        <* kindCheckM (Tuple res primKinds."Type") env
+    } # maybe (pure Nothing)) $ un Compose $ project t
 
 -- | Todo: emit partial kinds
 inferKindHole :: ParentCtxs ATypeVM -> AllTypeKindData -> AKindVM
 inferKindHole pars env = uncons pars # maybe hole \{ head: par, tail: pars' } ->
-  ( VF.case_
-  # VF.on _name (un Const >>> absurd)
-  # VF.on _var (un Const >>> absurd)
-  # VF.on _app case _ of
-      Tuple false r ->
-        let
-          from = inferKindMM r env
-          to = inferKindHole pars' env
-        in roll $ Compose $ Just $ VF.inj _fun $ Pair from to
-      Tuple true l ->
-        inferKindMM l env # unroll >>> un Compose >>>
-          ( VF.default hole
-          # VF.on _fun (\(Pair from _) -> from)
-          # maybe hole
-          )
-  # VF.on _fun (pure (review certainty primKinds."Type"))
-  ) (extract $ un Product $ fromDF $ fromParentCtx par)
+  VF.match
+    { name: un Const >>> absurd, var: un Const >>> absurd
+    , app: case _ of
+        Tuple false r ->
+          let
+            from = inferKindMM r env
+            to = inferKindHole pars' env
+          in emjJ _fun $ Pair from to
+        Tuple true l ->
+          inferKindMM l env # project >>> un Compose >>>
+            ( VF.default hole
+            # VF.on _fun (\(Pair from _) -> from)
+            # maybe hole
+            )
+    , fun: \_ -> fear primKinds."Type"
+    } $ extract $ un Product $ fromDF $ fromParentCtx par
   where
-    hole = roll $ Compose Nothing
+    -- FIXME
     inferKindMM :: ATypeVM -> AllTypeKindData -> AKindVM
-    inferKindMM t env = case hush (inferKindM t env) of
+    inferKindMM t env = case join $ CV.hush (inferKindM t env) of
       Nothing -> hole
-      Just k -> review certainty k
+      Just k -> fear k
 
 matchPartialKind :: AKindVM -> AKindV -> Boolean
 matchPartialKind (In (Compose Nothing)) _ = true
@@ -194,6 +244,91 @@ matchPartialKind (In (Compose (Just k))) (In k') =
     ) k'
   ) k
 
+-- | An associative, commutative, idempotent "join" operation on partial kinds.
+-- | Looks to replace a hole with a full type, won't merge leafs that are unequal.
+-- | I wish there was a way to abstract this for a class of functors ... hm ...
+-- | Maybe variants of distributive functors.
+-- |
+-- | Examples:
+-- | ```
+-- | (_        \/ _ -> _) ==> _ -> _
+-- | (  a -> _ \/ _ -> b) ==> a -> b
+-- | (# a -> _ \/ a -> b) fails
+-- | ```
+mergeKindMs :: AKindVM -> AKindVM -> Maybe AKindVM
+mergeKindMs (In (Compose Nothing)) k = pure k
+mergeKindMs k (In (Compose Nothing)) = pure k
+mergeKindMs l@(In (Compose (Just k1))) (In (Compose (Just k2))) =
+  let fail = empty in
+  ( VF.case_
+  # VF.on _name (
+    \(Const q1) ->
+      ( VF.default fail
+      # VF.on _name \(Const q2) ->
+        if q1 == q2 then pure l else fail
+      ) k2)
+  # VF.on _row (
+    \(Identity r1) ->
+      ( VF.default fail
+      # VF.on _row \(Identity r2) ->
+        mergeKindMs r1 r2 <#> \r ->
+          In (Compose (Just (VF.inj _row (Identity r))))
+      ) k2)
+  # VF.on _fun (
+    \(Pair i1 o1) ->
+      ( VF.default fail
+      # VF.on _fun \(Pair i2 o2) ->
+        let combPair i o = In (Compose (Just (VF.inj _fun (Pair i o))))
+        in combPair <$> mergeKindMs i1 i2 <*> mergeKindMs o1 o2
+      ) k2)
+  ) k1
+
+type CheckAKindR =
+  ( unify :: FProxy Pair
+  , var :: FProxy (Const Int)
+  | AKindVR
+  )
+type CheckAKindF = VariantF CheckAKindR
+type CheckAKind = Mu CheckAKindF
+
+_unify = SProxy :: SProxy "unify"
+
+type Fresh = State Int
+
+fresh :: Fresh Int
+fresh = get <* modify ((+) 1)
+
+runFresh :: forall a. Fresh a -> a
+runFresh = evalState <@> 0
+
+{-
+
+
+
+
+byAssumption :: forall a. a -> WhyKChecked a
+byAssumption = ?help
+
+inferKindsIn :: forall t. Traversable t =>
+  Map Ident (WhyKChecked CheckAKindM) ->
+  t ATypeVM ->
+  Either WhyNotKChecked (Map Ident (WhyKChecked CheckAKindM))
+inferKindsIn = ...
+
+inferKindsOf :: Array Ident -> Array ATypeVM -> Either WhyNotKChecked (Map Ident (WhyKChecked AKindVM))
+inferKindsOf vars usages =
+  let
+    startWith = Map.fromFoldable $ runFresh $ for vars
+      \v -> Tuple v <<< byAssumption <<< emjJ _var <$> fresh
+  in do
+    applied <- inferKindsIn startWith usages
+    result <- examineImplications startWith applied
+    doubleCheck result usages
+
+defaultKinds :: WhyKChecked AKindVM -> WhyKChecked AKindV
+defaultKinds = map (assume primKinds."Type")
+-}
+
 vfEqCase ::
   forall sym fnc v' v v1' v1 a.
     IsSymbol sym =>
@@ -214,6 +349,6 @@ instance eq1AKindVF :: Eq1 Eq1AKindVF where
 eqKind :: AKindV -> AKindV -> Boolean
 eqKind = eq `on` transMu Eq1AKindVF
 
-matchKind :: forall a t r. a -> AKindV -> AKindV -> Either (KindErrorVBase t AKindV r) a
-matchKind _ k1 k2 | k1 `not eqKind` k2 = Left $ doesNotMatch k1 k2
-matchKind a _ _ = Right a
+matchKind :: forall t r. AKindV -> AKindV -> CV.ERrors (KindErrorVRBase t AKindV r) Unit
+matchKind k1 k2 | k1 `not eqKind` k2 = CV.erroring $ doesNotMatch k1 k2
+matchKind _ _ = pure unit

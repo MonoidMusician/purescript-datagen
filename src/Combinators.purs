@@ -6,12 +6,12 @@ import Control.Apply (lift2)
 import Data.Array (uncons, unsnoc)
 import Data.Const (Const(..))
 import Data.Functor.Compose (Compose(..))
-import Data.Functor.Mu (Mu, roll)
+import Data.Functor.Mu (Mu, roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lens (Prism', prism')
 import Data.Map (insert) as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (mempty)
 import Data.Newtype (un)
 import Data.NonEmpty (NonEmpty, (:|))
@@ -20,8 +20,8 @@ import Data.Symbol (class IsSymbol, SProxy)
 import Data.Traversable (class Traversable)
 import Data.Tuple (Tuple(..))
 import Data.Variant.Internal (FProxy)
-import Matryoshka (transAna, transCataM)
-import Prelude (class Functor, compose, pure, ($), (<<<), (<@>))
+import Matryoshka (transAna, transCata, transCataM)
+import Prelude (class Applicative, class Functor, class Monad, compose, pure, ($), (<<<), (<@>))
 
 onlyType :: Proper -> Import
 onlyType = Type <@> mempty
@@ -126,5 +126,21 @@ qualify (Tuple name (ImportModule mims mp)) is =
   where
     mp' = Map.insert (Module (lastOf name :| [])) is mp
 
+-- | Transform between a partial tree (which may stop prematurely, with
+-- | `Compose Nothing`) and a full one.
 certainty :: forall f. Traversable f => Prism' (Mu (Compose Maybe f)) (Mu f)
-certainty = prism' (transAna (Compose <<< Just)) (transCataM (un Compose))
+certainty = prism' fear certify
+
+-- | Fear breeds uncertainty...
+fear :: forall f g. Functor f => Applicative g =>
+  Mu f -> Mu (Compose g f)
+fear = transAna (Compose <<< pure)
+
+-- | ... But there is a chance at regaining it.
+certify :: forall f g. Traversable f => Monad g => Traversable g =>
+  Mu (Compose g f) -> g (Mu f)
+certify = transCataM (un Compose)
+
+-- | Assumptions are dangerous.
+assume :: forall f. Functor f => Mu f -> Mu (Compose Maybe f) -> Mu f
+assume e = transCata (fromMaybe ue <<< un Compose) where ue = unroll e

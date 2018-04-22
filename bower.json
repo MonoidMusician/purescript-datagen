@@ -16,17 +16,21 @@
     "purescript-unicode": "^3.0.1",
     "purescript-verbal-expressions": "^3.0.0",
     "purescript-matryoshka": "^0.3.0",
-    "purescript-variant": "^3.2.1",
+    "purescript-variant": "MonoidMusician/purescript-variant#foldable-traversable",
     "purescript-pairs": "^5.0.0",
     "purescript-quickcheck-laws": "^3.0.0",
     "purescript-argonaut": "^3.1.0",
     "purescript-halogen-autocomplete": "https://github.com/MonoidMusician/purescript-halogen-autocomplete.git#master",
     "purescript-either": "^3.1.0",
-    "purescript-codec-argonaut": "^4.0.0",
+    "purescript-codec-argonaut": "^5.0.0",
     "purescript-maps": "^3.5.0",
     "purescript-affjax": "5.0.0",
     "purescript-halogen-textcursor": "MonoidMusician/purescript-halogen-textcursor",
-    "purescript-halogen-zuruzuru": "MonoidMusician/purescript-halogen-zuruzuru"
+    "purescript-halogen-zuruzuru": "MonoidMusician/purescript-halogen-zuruzuru",
+    "purescript-validation": "^3.2.0",
+    "purescript-arrays": "4.3.0",
+    "purescript-these": "^3.1.0",
+    "purescript-complex-validation": "MonoidMusician/purescript-complex-validation"
   },
   "devDependencies": {
     "purescript-node-fs": "^4.0.0"

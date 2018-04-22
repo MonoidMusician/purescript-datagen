@@ -5,6 +5,7 @@ import Prelude
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
 import Autocomplete (customElemConf)
 import Combinators (aTypeApp, aTypeFunction, aTypeName, certainty, chainr)
+import Complex.Validation as CV
 import Control.Comonad (extract)
 import Control.Comonad.Env (EnvT(..))
 import Control.Monad.Aff (Aff)
@@ -21,12 +22,13 @@ import DOM.HTML (window)
 import DOM.HTML.Location (href)
 import DOM.HTML.Window (location)
 import Data.Array (mapMaybe)
+import Data.Array.NonEmpty as NEA
 import Data.Codec (decode)
 import Data.Const (Const(..))
-import Data.Either (Either(..), fromRight, hush)
+import Data.Either (Either(..), fromRight)
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
-import Data.Functor.Mu (roll, unroll)
+import Data.Functor.Mu (Mu(..), roll, unroll)
 import Data.Functor.Product (Product(..))
 import Data.Functor.Variant as VF
 import Data.Lazy (force)
@@ -253,7 +255,7 @@ component =
       where
         -- | Todo: prevent partial application of type synonyms
         requiredKind = inferKindHole pars (Tuple items empty)
-        currentKind = hush $ inferKindM (typ ^. _focusRec) (Tuple items empty)
+        currentKind = join $ CV.hush $ inferKindM (typ ^. _focusRec) (Tuple items empty)
         matches = matchPartialKind requiredKind
         hasRightKind (Tuple q itskind) = go e1 itskind
           where
@@ -292,13 +294,18 @@ component =
             [ HL.Button.renderAsField "Type application" (app false) false
             ]
           else
-            let takesParam = (VF.default false # VF.on _fun (pure true) # maybe true) (unroll <$> currentKind) in
+            let
+              takesParam = case currentKind of
+                Nothing -> true
+                Just (In v) -> VF.on _fun (pure true) (VF.default false) v
+            in
             [ [ HL.Button.renderAsField "Make it a parameter" (app false) false ]
             , guard takesParam $> HL.Button.renderAsField "Give it a parameter" (app true) false
             ] # fold
         renderKind t = case inferKindM t (Tuple items empty) of
-          Left err -> HH.text $ showKindError (renderStr true) err
-          Right k -> HH.text $ showAKind k
+          CV.Error err -> HH.text $ showKindError (renderStr true) (NEA.head (NEA.head err))
+          CV.Success (Just k) -> HH.text $ showAKind k
+          CV.Success Nothing -> HH.text $ "No inferrable kind"
 
 
   eval :: Query ~> H.ParentDSL State Query (Autocomplete.Query Suggestion) Slot (ZRec ATypeVM) (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
