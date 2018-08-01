@@ -10,6 +10,7 @@ import Control.Extend (class Extend)
 import Data.Bifunctor (bimap, lmap)
 import Data.Const (Const(..))
 import Data.Either (Either(..), either)
+import Data.Foldable (foldr)
 import Data.Function (on)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Coproduct (Coproduct, left, right)
@@ -394,8 +395,17 @@ handleATypeVFReinjector methods = VF.case_
   # VF.on _fun (methods."Pair" (VF.inj _fun) (fromDF >>> VF.inj _fun >>> toDF))
   # VF.on _app (methods."Pair" (VF.inj _app) (fromDF >>> VF.inj _app >>> toDF))
 
+cataZRec ::
+  forall t f f' a.
+    Recursive t f =>
+    Corecursive t f =>
+    Diff1 f f' =>
+  Algebra f a -> ZRec t -> a
+cataZRec alg (context :<<~: focus) = foldr go (cata alg focus) context where
+  go h a = alg $ upF $ pure (cata alg <$> fromParentCtx h) :<-: a
+
 simpleShowZRec :: ZRec ATypeV -> String
-simpleShowZRec (context :<<~: focus) = go context cx
+simpleShowZRec = cataZRec show1
   where
     show1 :: Algebra ATypeVF String
     show1 = VF.match
@@ -406,16 +416,3 @@ simpleShowZRec (context :<<~: focus) = go context cx
       , app: \(Pair l r) ->
           "(" <> l <> ") (" <> r <> ")"
       }
-    showAll = cata show1
-    cx = showAll focus
-    go ls s = case uncons ls of
-      Nothing -> s
-      Just { head: h, tail: r } -> go r $ VF.match
-        { fun: showBranch " -> " s
-        , app: showBranch " " s
-        , name: unwrap >>> absurd
-        , var: unwrap >>> absurd
-        } $ fromDF $ fromParentCtx h
-    showBranch :: String -> String -> DPair ATypeV -> String
-    showBranch sep s (Tuple false a) = "{" <> s <> "}" <> sep <> showAll a
-    showBranch sep s (Tuple true a) = showAll a <> sep <> "{" <> s <> "}"
