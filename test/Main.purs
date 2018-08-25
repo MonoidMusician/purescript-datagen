@@ -3,10 +3,8 @@ module Test.Main where
 import Combinators (aTypeApp, aTypeFunction, aTypeName, aTypeVar, alias, chainl, chainr, dataImport, dataModule, importAllFrom, importFrom, namedNewType, onlyType, qualify, typeAbsType)
 import Control.Comonad.Cofree ((:<))
 import Control.Comonad.Env (EnvT(..))
-import Control.Monad.Eff (Eff, kind Effect)
-import Control.Monad.Eff.Console (CONSOLE, log, logShow)
-import Control.Monad.Eff.Exception (EXCEPTION)
-import Control.Monad.Eff.Random (RANDOM)
+import Effect (Effect)
+import Effect.Console (log, logShow)
 import Data.Bitraversable (bitraverse)
 import Data.Functor.Variant (match)
 import Data.Lens (_2)
@@ -27,7 +25,6 @@ import Types (ATypeV, Constructors(..), DataType(..), DataTypeDef(..), Ident(..)
 import Zippers (ZF, ZRec, downIntoRec, simpleShowZRec, tipRec, topRec)
 
 type EmptyRow = ()
-type EmptyEffect = () :: # Effect
 
 thisModule :: ModuleData
 thisModule =
@@ -126,7 +123,7 @@ leftIng = downIntoRec leftIsh
 leftInc :: ZRec ATypeVC -> ZRec ATypeVC
 leftInc = downIntoRec (un EnvT >>> snd >>> leftIsh)
 
-main :: Eff ( exception :: EXCEPTION, random :: RANDOM, console :: CONSOLE ) Unit
+main :: Effect Unit
 main = do
   let showz = bitraverse logShow (topRec >>> cofrecurse >>> log) >>> void
   let testPath path = showz <<< patch (_2 (path <<< tipRec) testTypeC)
