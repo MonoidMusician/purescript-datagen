@@ -29,7 +29,8 @@
     "purescript-halogen-zuruzuru": "MonoidMusician/purescript-halogen-zuruzuru#halogen-5",
     "purescript-validation": "^4.0.0",
     "purescript-these": "^4.0.0",
-    "purescript-complex-validation": "MonoidMusician/purescript-complex-validation"
+    "purescript-complex-validation": "MonoidMusician/purescript-complex-validation",
+    "purescript-halogen-pager": "MonoidMusician/purescript-halogen-pager"
   },
   "devDependencies": {
     "purescript-node-fs": "^5.0.0"
