@@ -11,9 +11,8 @@ import Data.Functor.Mu (Mu)
 import Data.Functor.Variant (FProxy, SProxy(..), VariantF)
 import Data.Identity (Identity)
 import Data.Map (Map)
-import Data.Map (toAscUnfoldable) as Map
+import Data.Map (toUnfoldable) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Monoid (class Monoid, mempty)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Pair (Pair)
 import Data.Set (Set)
@@ -67,7 +66,7 @@ instance semigroupImportModule :: Semigroup ImportModule where
 instance monoidImportModule :: Monoid ImportModule where
   mempty = ImportModule mempty mempty
 showImportModules :: ImportModules -> String
-showImportModules = joinWith "\n" <<< Map.toAscUnfoldable >>> concatMap
+showImportModules = joinWith "\n" <<< Map.toUnfoldable >>> concatMap
   \(Tuple modul (ImportModule mims aliases)) ->
     let
       showUnq []  = "import " <> show modul
@@ -75,7 +74,7 @@ showImportModules = joinWith "\n" <<< Map.toAscUnfoldable >>> concatMap
         "(" <> joinWith ", " (show <$> ims) <> ")"
       showQ (Tuple mod alias) = showUnq alias <> " as " <> show mod
     in Array.fromFoldable (showUnq <$> mims) <>
-      (showQ <$> Map.toAscUnfoldable aliases)
+      (showQ <$> Map.toUnfoldable aliases)
 
 type Imports = Array Import
 data Import
@@ -122,7 +121,7 @@ type ATypeVR =
   , var :: FProxy (Const Ident)
   , fun :: FProxy Pair
   , app :: FProxy Pair
-  -- , row :: FProxy (Product StrMap Maybe)
+  -- , row :: FProxy (Product Foreign.Object Maybe)
   )
 type ATypeVF = VariantF ATypeVR
 type ATypeV = Mu ATypeVF

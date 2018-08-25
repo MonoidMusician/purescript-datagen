@@ -1,11 +1,10 @@
 module Data.Spliceable where
 
 import Data.Array (take, drop, length) as Array
-import Data.Monoid (class Monoid, mempty, (<>))
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (over2, unwrap)
 import Data.String (take, drop, length) as String
-import Prelude ((-), (<<<), (<@>))
+import Prelude ((-), (<<<), (<@>), class Monoid, mempty, (<>))
 
 -- | Class for monoids that support slicing operations, i.e. indexing a section
 -- | of itself.

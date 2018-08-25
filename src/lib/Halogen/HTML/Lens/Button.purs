@@ -11,16 +11,16 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Control.Monad.Eff (Eff)
-import DOM (DOM)
-import DOM.Event.Types (MouseEvent)
+import Effect (Effect)
+
+import Web.UIEvent.MouseEvent (MouseEvent)
 import Data.Array (singleton)
 import Halogen.HTML.Lens (Query(..))
 
-type Property s p = H.IProp p (Query s)
-type Element s p = H.HTML p (Query s)
+type Property s p = HH.IProp p (Query s Unit)
+type Element s p = HH.HTML p (Query s Unit)
 
-setter :: forall s eff. (s -> s) -> MouseEvent -> Eff (dom :: DOM | eff) (s -> s)
+setter :: forall s. (s -> s) -> MouseEvent -> Effect (s -> s)
 setter lens e = pure lens
 
 query :: forall s a. (s -> s) -> MouseEvent -> a -> Query s a

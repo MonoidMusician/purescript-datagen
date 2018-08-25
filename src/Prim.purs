@@ -1,4 +1,4 @@
-module Prim.Repr where
+module Repr.Prim where
 
 import Data.Bifunctor (bimap)
 import Data.Const (Const(..))

@@ -2,8 +2,8 @@ module Autocomplete where
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
-import DOM.Node.ParentNode (QuerySelector(..))
+import Effect (Effect)
+import Web.DOM.ParentNode (QuerySelector(..))
 import Data.Array (unsnoc)
 import Data.Bifunctor (lmap)
 import Data.Foldable (traverse_)
@@ -17,7 +17,7 @@ import Halogen.Aff as HA
 import Halogen.Autocomplete.Component as AC
 import Halogen.HTML as HH
 import Halogen.VDom.Driver (runUI)
-import Prim.Repr (kindArrow, primKinds, rowKind, functor)
+import Repr.Prim (kindArrow, primKinds, rowKind, functor)
 import Reprinting (showAKind)
 import Types (AKindV, Module(..), Proper(..), Qualified(..))
 
@@ -53,7 +53,7 @@ customElemConf = AC.defaultConfig
 
 items :: Array (Tuple (Qualified Proper) AKindV)
 items = lmap (Qualified (Module (Proper "Zippers" :| []))) <$>
-  [ Tuple (Proper "DStrMap")    $ functor
+  [ Tuple (Proper "DForeign.Object")    $ functor
   , Tuple (Proper "VF")         $ kindArrow (rowKind primKinds."Type") functor
   , Tuple (Proper "DF")         $ kindArrow functor functor
   , Tuple (Proper "ATypeVR")    $ rowKind primKinds."Type"
@@ -66,7 +66,7 @@ items = lmap (Qualified (Module (Proper "Zippers" :| []))) <$>
   , Tuple (Proper "ZipperVRec") $ primKinds."Type"
   ]
 
-main :: Eff (HA.HalogenEffects ()) Unit
+main :: Effect Unit
 main = HA.runHalogenAff do
   body <- HA.awaitBody
   HA.selectElement (QuerySelector "#customElement") >>= traverse_

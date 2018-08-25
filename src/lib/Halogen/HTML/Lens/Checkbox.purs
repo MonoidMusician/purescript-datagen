@@ -7,34 +7,32 @@ module Halogen.HTML.Lens.Checkbox
     ) where
 
 import Prelude
-import DOM.Event.Event as Event
-import DOM.HTML.HTMLInputElement as HInput
+import Web.Event.Event as Event
+import Web.HTML.HTMLInputElement as HInput
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Control.Monad.Eff (Eff)
+import Effect (Effect)
 import Control.Monad.Except (runExcept)
-import DOM (DOM)
-import DOM.Event.Types (Event)
-import DOM.HTML.Types (readHTMLInputElement)
+
+import Web.Event.Event (Event)
 import Data.Array (singleton)
-import Data.Either (Either(..))
-import Data.Foreign (toForeign)
+import Data.Maybe (Maybe(..))
 import Data.Lens ((.~), (^.))
 import Data.Lens.Types (Lens')
 import Halogen.HTML.Lens (Query(..))
 import Halogen.HTML.Properties (InputType(InputCheckbox))
 
-type Property s p = H.IProp p (Query s)
-type Element s p = H.HTML p (Query s)
+type Property s p = HH.IProp p (Query s Unit)
+type Element s p = HH.HTML p (Query s Unit)
 
-setter :: forall s eff. Lens' s Boolean -> Event -> Eff (dom :: DOM | eff) (s -> s)
+setter :: forall s. Lens' s Boolean -> Event -> Effect (s -> s)
 setter lens e =
-    case runExcept $ readHTMLInputElement $ toForeign $ Event.target e of
-        Left _ -> pure id
-        Right node -> do
-            value <- H.liftEff $ HInput.checked node
+    case HInput.fromEventTarget =<< Event.target e of
+        Nothing -> pure identity
+        Just node -> do
+            value <- H.liftEffect $ HInput.checked node
             pure (lens .~ value)
 
 query :: forall s a. Lens' s Boolean -> Event -> a -> Query s a

@@ -12,7 +12,7 @@ import Data.Functor.Variant as VF
 import Data.Lens (Prism', prism')
 import Data.Map (insert) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Monoid (mempty)
+import Data.Monoid (class Monoid, mempty, (<>))
 import Data.Newtype (un)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Pair (Pair(..))
@@ -22,6 +22,7 @@ import Data.Tuple (Tuple(..))
 import Data.Variant.Internal (FProxy)
 import Matryoshka (transAna, transCata, transCataM)
 import Prelude (class Applicative, class Functor, class Monad, compose, pure, ($), (<<<), (<@>))
+import Prim.Row as Row
 
 onlyType :: Proper -> Import
 onlyType = Type <@> mempty
@@ -44,14 +45,14 @@ aType = roll
 aTypeConst ::
   forall sym a bleh.
     IsSymbol sym =>
-    RowCons sym (FProxy (Const a)) bleh ATypeVR =>
+    Row.Cons sym (FProxy (Const a)) bleh ATypeVR =>
   SProxy sym -> a -> ATypeV
 aTypeConst k a = aType $ VF.inj k $ Const a
 
 aTypePair ::
   forall sym bleh.
     IsSymbol sym =>
-    RowCons sym (FProxy Pair) bleh ATypeVR =>
+    Row.Cons sym (FProxy Pair) bleh ATypeVR =>
   SProxy sym -> ATypeV -> ATypeV -> ATypeV
 aTypePair k a b  = aType $ VF.inj k $ Pair a b
 
@@ -60,7 +61,7 @@ aTypeProduct ::
     IsSymbol sym =>
     Functor f =>
     Functor g =>
-    RowCons sym (FProxy (Product f g)) bleh ATypeVR =>
+    Row.Cons sym (FProxy (Product f g)) bleh ATypeVR =>
   SProxy sym -> f ATypeV -> g ATypeV -> ATypeV
 aTypeProduct k a b = aType $ VF.inj k $ Product $ Tuple a b
 

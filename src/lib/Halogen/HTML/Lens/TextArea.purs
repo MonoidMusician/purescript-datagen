@@ -5,15 +5,13 @@ module Halogen.HTML.Lens.TextArea
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
+import Effect (Effect)
 import Control.Monad.Except (runExcept)
-import DOM (DOM)
-import DOM.Event.Event as Event
-import DOM.Event.Types (Event)
-import DOM.HTML.HTMLTextAreaElement as HTextArea
-import DOM.HTML.Types (readHTMLTextAreaElement)
-import Data.Either (Either(..))
-import Data.Foreign (toForeign)
+
+import Web.Event.Event as Event
+import Web.Event.Event (Event)
+import Web.HTML.HTMLTextAreaElement as HTextArea
+import Data.Maybe (Maybe(..))
 import Data.Lens (Lens', (.~), (^.))
 import Halogen as H
 import Halogen.HTML as HH
@@ -21,14 +19,14 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Lens (Query(..))
 import Halogen.HTML.Properties as HP
 
-type Property s p = H.IProp p (Query s)
-type Element s p = H.HTML p (Query s)
+type Property s p = HH.IProp p (Query s Unit)
+type Element s p = HH.HTML p (Query s Unit)
 
-setter :: forall s eff. Lens' s String -> Event -> Eff (dom :: DOM | eff) (s -> s)
+setter :: forall s. Lens' s String -> Event -> Effect (s -> s)
 setter lens e =
-    case runExcept $ readHTMLTextAreaElement $ toForeign $ Event.target e of
-        Left _ -> pure id
-        Right node -> do
+    case HTextArea.fromEventTarget =<< Event.target e of
+        Nothing -> pure identity
+        Just node -> do
             value <- HTextArea.value node
             pure (lens .~ value)
 

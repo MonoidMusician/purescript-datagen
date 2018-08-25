@@ -9,7 +9,7 @@ import Data.Map (Map)
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), joinWith, split)
 import Externs.Codec.AKind (codecAKindV)
-import Externs.Codec.Names (codecStrMapish, ensureProper, parseModule)
+import Externs.Codec.Names (codecForeignObjectish, ensureProper, parseModule)
 import Types (AKindV, Proper, Qualified(..))
 
 type TypeKindData = Map (Qualified Proper) AKindV
@@ -25,4 +25,4 @@ prismPQ = prism' show \s -> do
     Just m  -> Qualified m typ
 
 codecTypeKindData :: JsonCodec TypeKindData
-codecTypeKindData = codecStrMapish prismPQ codecAKindV
+codecTypeKindData = codecForeignObjectish prismPQ codecAKindV

@@ -6,8 +6,8 @@ import Control.Comonad.Cofree (Cofree, head, tail)
 import Data.Functor.Variant as VF
 import Data.Newtype (unwrap)
 import Data.Pair (Pair(..))
-import Data.StrMap (StrMap)
-import Data.StrMap (toUnfoldable) as StrMap
+import Foreign.Object (Object)
+import Foreign.Object (toUnfoldable) as Foreign.Object
 import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll)
 import Data.Tuple (Tuple(..))
 import Types (ATypeVF, _app, _fun, _name, _var)
@@ -22,8 +22,8 @@ joinWithIfNE :: forall a. String -> (a -> String) -> Array a -> String
 joinWithIfNE _ _ [] = ""
 joinWithIfNE sep f as = sep <> joinWith sep (f <$> as)
 
-showFields :: forall a. StrMap (Tuple a String) -> String
-showFields m = joinWith ", " $ StrMap.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
+showFields :: forall a. Object (Tuple a String) -> String
+showFields m = joinWith ", " $ Foreign.Object.toUnfoldable m <#> \(Tuple k (Tuple _ v)) ->
   k <> " :: " <> v
 
 cofrecurse :: forall a. Show a => Cofree ATypeVF a -> String

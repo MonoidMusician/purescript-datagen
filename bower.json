@@ -9,35 +9,32 @@
     "dist"
   ],
   "dependencies": {
-    "purescript-console": "^3.0.0",
-    "purescript-halogen": "^3.0.0",
-    "purescript-stringutils": "^0.0.6",
-    "purescript-strings": "^3.3.1",
-    "purescript-unicode": "^3.0.1",
-    "purescript-verbal-expressions": "^3.0.0",
-    "purescript-matryoshka": "^0.3.0",
-    "purescript-variant": "MonoidMusician/purescript-variant#foldable-traversable",
-    "purescript-pairs": "^5.0.0",
-    "purescript-quickcheck-laws": "^3.0.0",
-    "purescript-argonaut": "^3.1.0",
-    "purescript-halogen-autocomplete": "https://github.com/MonoidMusician/purescript-halogen-autocomplete.git#master",
-    "purescript-either": "^3.1.0",
-    "purescript-codec-argonaut": "^5.0.0",
-    "purescript-maps": "^3.5.0",
-    "purescript-affjax": "5.0.0",
-    "purescript-halogen-textcursor": "MonoidMusician/purescript-halogen-textcursor",
-    "purescript-halogen-zuruzuru": "MonoidMusician/purescript-halogen-zuruzuru",
-    "purescript-validation": "^3.2.0",
-    "purescript-arrays": "4.3.0",
-    "purescript-these": "^3.1.0",
+    "purescript-console": "^4.0.0",
+    "purescript-halogen": "master",
+    "purescript-stringutils": "0.0.8",
+    "purescript-strings": "^4.0.0",
+    "purescript-unicode": "^4.0.1",
+    "purescript-matryoshka": "^0.4.0",
+    "purescript-variant": "MonoidMusician/purescript-variant#foldable-traversable-0.12",
+    "purescript-pairs": "^6.0.0",
+    "purescript-quickcheck-laws": "^4.0.0",
+    "purescript-argonaut": "^4.0.0",
+    "purescript-halogen-autocomplete": "MonoidMusician/purescript-halogen-autocomplete#halogen-5",
+    "purescript-either": "^4.0.0",
+    "purescript-codec-argonaut": "^6.0.0",
+    "purescript-ordered-collections": "^1.0.0",
+    "purescript-foreign-object": "^1.0.0",
+    "purescript-affjax": "7.0.0",
+    "purescript-halogen-textcursor": "MonoidMusician/purescript-halogen-textcursor#halogen-5",
+    "purescript-halogen-zuruzuru": "MonoidMusician/purescript-halogen-zuruzuru#halogen-5",
+    "purescript-validation": "^4.0.0",
+    "purescript-these": "^4.0.0",
     "purescript-complex-validation": "MonoidMusician/purescript-complex-validation"
   },
   "devDependencies": {
-    "purescript-node-fs": "^4.0.0"
+    "purescript-node-fs": "^5.0.0"
   },
   "resolutions": {
-    "purescript-halogen-autocomplete": "master",
-    "purescript-variant": "foldable-traversable",
-    "purescript-record": "^0.2.0"
+    "purescript-variant": "foldable-traversable-0.12"
   }
 }

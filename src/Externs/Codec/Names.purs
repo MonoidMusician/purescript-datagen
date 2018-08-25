@@ -12,16 +12,17 @@ import Data.Char.Unicode (isAlphaNum, isUpper)
 import Data.Codec (basicCodec, decode, encode, (>~>))
 import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), string)
 import Data.Codec.Argonaut.Common (tuple)
-import Data.Codec.Argonaut.Compat (maybe, strMap)
+import Data.Codec.Argonaut.Compat (maybe, foreignObject)
 import Data.Either (note)
+import Data.Enum (fromEnum)
 import Data.Lens (Prism', preview, review)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.NonEmpty ((:|))
 import Data.Profunctor (dimap)
-import Data.StrMap as SM
-import Data.String.CodePoints (Pattern(..), codePointAt, codePointToInt, split, toCodePointArray)
+import Foreign.Object as FO
+import Data.String (Pattern(..), codePointAt, split, toCodePointArray)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Types (Module(..), Proper(..), Qualified(..))
@@ -55,7 +56,7 @@ ensureProper :: String -> Maybe Proper
 ensureProper s = do
   c <- codePointAt 0 s
   let
-    testChar p = p <<< fromCharCode <<< codePointToInt
+    testChar p = fromMaybe false <<< map p <<< fromCharCode <<< fromEnum
     otherChar = isAlphaNum || eq '\'' || eq '_'
   if testChar isUpper c && all (testChar otherChar) (toCodePointArray s)
     then pure (Proper s)
@@ -67,13 +68,13 @@ codecProper = string >~> basicCodec dec show
     dec s = note (UnexpectedValue (A.fromString s)) $
       ensureProper s
 
-codecStrMapish :: forall k v. Ord k => Prism' String k -> JsonCodec v -> JsonCodec (Map k v)
-codecStrMapish codecKey codecValue = strMap codecValue >~> basicCodec dec enc
+codecForeignObjectish :: forall k v. Ord k => Prism' String k -> JsonCodec v -> JsonCodec (Map k v)
+codecForeignObjectish codecKey codecValue = foreignObject codecValue >~> basicCodec dec enc
   where
-    asArray = id :: Array ~> Array
+    asArray = identity :: Array ~> Array
     dec s =
       let
         conv = traverse $ ltraverse \k ->
           note (UnexpectedValue (A.fromString k)) $ preview codecKey k
-      in Map.fromFoldable <$> conv (asArray (SM.toUnfoldable s))
-    enc = SM.fromFoldable <<< map (lmap (review codecKey)) <<< asArray <<< Map.toUnfoldable
+      in Map.fromFoldable <$> conv (asArray (FO.toUnfoldable s))
+    enc = FO.fromFoldable <<< map (lmap (review codecKey)) <<< asArray <<< Map.toUnfoldable

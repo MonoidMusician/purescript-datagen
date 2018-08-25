@@ -18,14 +18,14 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (un)
 import Data.Pair (Pair(..))
 import Data.Profunctor (dimap)
-import Data.StrMap (StrMap)
-import Data.StrMap as StrMap
+import Foreign.Object (Object)
+import Foreign.Object as Foreign.Object
 import Data.Tuple (Tuple(..), uncurry)
 import Externs.Codec.Names (codecProper, codecQualified)
 import Types (AKindV, AKindVF, _fun, _name, _row)
 
 prop :: String -> Json -> Maybe Json
-prop i = A.foldJsonObject Nothing (StrMap.lookup i)
+prop i = A.caseJsonObject Nothing (Foreign.Object.lookup i)
 
 recursiveCodec :: forall f. (forall a. Lazy (JsonCodec a) -> JsonCodec (f a)) -> JsonCodec (Mu f)
 recursiveCodec codec = dimap unroll roll (codec (defer \_ -> recursiveCodec codec))
@@ -34,11 +34,11 @@ contentField :: JsonCodec Json
 contentField = basicCodec (pure <<< dec) enc
   where
   dec :: Json -> Json
-  dec j = A.foldJsonObject j (A.fromObject <<< rename "value" "content") j
+  dec j = A.caseJsonObject j (A.fromObject <<< rename "value" "content") j
   enc :: Json -> Json
-  enc j = A.foldJsonObject j (A.fromObject <<< rename "content" "value") j
-  rename ∷ String -> String -> A.JObject -> A.JObject
-  rename oldName newName obj = maybe obj (uncurry (StrMap.insert newName)) (StrMap.pop oldName obj)
+  enc j = A.caseJsonObject j (A.fromObject <<< rename "content" "value") j
+  rename ∷ String -> String -> Object Json -> Object Json
+  rename oldName newName obj = maybe obj (uncurry (Foreign.Object.insert newName)) (Foreign.Object.pop oldName obj)
 
 pair :: forall a. JsonCodec a -> JsonCodec (Pair a)
 pair codec = tuple codec codec # dimap
@@ -65,8 +65,8 @@ codecAKindV = recursiveCodec inner
             "NamedKind" -> VF.inj _name <<< Const <$>
               getContent codecQualifiedProper
             _ -> Left (AtKey "tag" (UnexpectedValue (A.fromString tag)))
-        mkContent :: forall b. String -> JsonCodec b -> b -> StrMap Json
-        mkContent t c v = StrMap.fromFoldable
+        mkContent :: forall b. String -> JsonCodec b -> b -> Object Json
+        mkContent t c v = Foreign.Object.fromFoldable
           [ Tuple "tag" $ A.fromString t
           , Tuple "contents" $ encode c v
           ]

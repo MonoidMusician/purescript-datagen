@@ -25,11 +25,12 @@ import Data.Symbol (class IsSymbol)
 import Data.Tuple (Tuple(..), fst, snd)
 import Externs.Codec.TypeData (TypeKindData)
 import Matryoshka (class Corecursive, cata, embed, project)
-import Prim.Repr (primKinds)
+import Repr.Prim (primKinds)
 import Reprinting (showAKind)
 import Types (AKindV, AKindVF, AKindVM, AKindVR, ATypeV, ATypeVM, Ident, Proper, Qualified, _fun, _name, _row)
 import Zippers (ParentCtxs, fromDF, fromParentCtx)
 import Complex.Validation as CV
+import Prim.Row as Row
 
 type Kinded = Tuple ATypeV AKindV
 newtype KindChecked = KindChecked Kinded
@@ -89,7 +90,7 @@ showKindError showt = cata $ VF.case_
 emjJ ::
   forall t f s r r'.
     IsSymbol s =>
-    RowCons s (FProxy f) r' r =>
+    Row.Cons s (FProxy f) r' r =>
     Functor f =>
     Corecursive t (Compose Maybe (VariantF r)) =>
   SProxy s -> f t -> t
@@ -101,25 +102,25 @@ hole = embed (Compose Nothing)
 extractCase ::
   forall s f v' v a r.
     IsSymbol s =>
-    RowCons s (FProxy f) v' v =>
+    Row.Cons s (FProxy f) v' v =>
   SProxy s -> VariantF v a -> r -> (f a -> r) -> r
 extractCase label value df handle =
   VF.on label handle (const df) value
 
 extractCaseIn ::
-  forall s f v' v a r.
+  forall s f v' v r.
     IsSymbol s =>
-    RowCons s (FProxy f) v' v =>
+    Row.Cons s (FProxy f) v' v =>
   SProxy s -> Mu (VariantF v) -> r -> (f (Mu (VariantF v)) -> r) -> r
 extractCaseIn label value df handle =
   extractCase label (project value) df handle
 
 requireCaseIn ::
-  forall s f v' v e t es' es a a.
+  forall s f v' v e t es' es a.
     IsSymbol s =>
-    RowCons s (FProxy f) v' v =>
+    Row.Cons s (FProxy f) v' v =>
     IsSymbol e =>
-    RowCons e (FProxy (Const t)) es' es =>
+    Row.Cons e (FProxy (Const t)) es' es =>
   Mu (VariantF v) -> SProxy s ->
   SProxy e -> t ->
   (f (Mu (VariantF v)) -> a) ->
@@ -205,11 +206,11 @@ inferKindHole pars env = uncons pars # maybe hole \{ head: par, tail: pars' } ->
     , app: case _ of
         Tuple false r ->
           let
-            from = inferKindMM r env
+            from = inferKindMM r
             to = inferKindHole pars' env
           in emjJ _fun $ Pair from to
         Tuple true l ->
-          inferKindMM l env # project >>> un Compose >>>
+          inferKindMM l # project >>> un Compose >>>
             ( VF.default hole
             # VF.on _fun (\(Pair from _) -> from)
             # maybe hole
@@ -218,8 +219,8 @@ inferKindHole pars env = uncons pars # maybe hole \{ head: par, tail: pars' } ->
     } $ extract $ un Product $ fromDF $ fromParentCtx par
   where
     -- FIXME
-    inferKindMM :: ATypeVM -> AllTypeKindData -> AKindVM
-    inferKindMM t env = case join $ CV.hush (inferKindM t env) of
+    inferKindMM :: ATypeVM -> AKindVM
+    inferKindMM t = case join $ CV.hush (inferKindM t env) of
       Nothing -> hole
       Just k -> fear k
 
@@ -333,8 +334,8 @@ vfEqCase ::
   forall sym fnc v' v v1' v1 a.
     IsSymbol sym =>
     Eq (fnc a) =>
-    RowCons sym (FProxy fnc) v' v =>
-    RowCons sym (FProxy fnc) v1' v1 =>
+    Row.Cons sym (FProxy fnc) v' v =>
+    Row.Cons sym (FProxy fnc) v1' v1 =>
   SProxy sym ->
   (VariantF v' a -> VariantF v1 a -> Boolean) ->
   VariantF v a -> VariantF v1 a -> Boolean

@@ -1,7 +1,6 @@
 module Zippers where
 
 import Prelude
-
 import Control.Apply (lift2)
 import Control.Comonad (class Comonad)
 import Control.Comonad.Cofree (Cofree)
@@ -25,8 +24,8 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid.Additive (Additive)
 import Data.Newtype (unwrap, wrap)
 import Data.Pair (Pair(..))
-import Data.StrMap (StrMap)
-import Data.StrMap as StrMap
+import Foreign.Object (Object)
+import Foreign.Object as Object
 import Data.Symbol (class IsSymbol, SProxy(..))
 import Data.Tuple (Tuple(..), fst, uncurry)
 import Data.Variant.Internal (FProxy(..), RLProxy(..))
@@ -36,6 +35,7 @@ import Test.QuickCheck (class Arbitrary, class Coarbitrary, arbitrary, coarbitra
 import Type.Row (class ListToRow, class RowToList, Cons, Nil, kind RowList)
 import Types (ATypeV, ATypeVF, Ident, Proper, Qualified, _app, _fun, _name, _var)
 import Unsafe.Coerce (unsafeCoerce)
+import Prim.Row as Row
 
 type Tag = Tuple (Additive Int) (Additive Int)
 type ATypeVC = Cofree ATypeVF Tag
@@ -115,7 +115,7 @@ injZF :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
 injZF g (f'x :<-: x) = injDF g <$> f'x :<-: x
 injZF2 :: forall f f' g x. Diff1 f f' => Diff1 (g f) (g f') =>
   (forall a. a ~> g a) -> ZF f (ZF f x) -> ZF (g f) (ZF (g f) x)
-injZF2 g (f'x :<-: x) = f'x <#> (injDF g >>> map (injZF g)) :<-: injZF g x
+injZF2 g (f'x :<-: x) = (f'x <#> (injDF g >>> map (injZF g))) :<-: injZF g x
 liftZF :: forall f f' g g' x. Diff1 f f' => Diff1 g g' => (f' x -> g' x) -> ZF f x -> ZF g x
 liftZF fg (f'x :<-: x) = liftDF fg <$> f'x :<-: x
 
@@ -160,13 +160,13 @@ instance derivativeofPair_isDPair :: Diff1 Pair (Tuple Boolean) where
     Tuple false r, l -> Pair l r
     Tuple true  l, r -> Pair l r
 
-type DStrMap = Compose (Tuple String) StrMap
-instance derivativeofStrMap_isDStrMap :: Diff1 StrMap (Compose (Tuple String) StrMap) where
-  downF sm = sm # StrMap.mapWithKey \k v -> (_ :<-: v) $ defer \_ ->
-    toDF (Compose (Tuple k (StrMap.delete k sm)))
+type DObject = Compose (Tuple String) Object
+instance derivativeofObject_isDObject :: Diff1 Object (Compose (Tuple String) Object) where
+  downF sm = sm # Object.mapWithKey \k v -> (_ :<-: v) $ defer \_ ->
+    toDF (Compose (Tuple k (Object.delete k sm)))
   upF (c :<-: v) = case fromDF $ force c of
     Compose (Tuple k sm) ->
-      StrMap.insert k v sm
+      Object.insert k v sm
 
 instance derivativeofConst_isVoid :: Diff1 (Const a) (Const Void) where
   downF (Const a) = Const a
@@ -235,13 +235,13 @@ instance diffVCons ::
   ( IsSymbol sym
   , Functor f
   , Diff1 f f'
-  , RowCons sym (FProxy f) n r
+  , Row.Cons sym (FProxy f) n r
   , ListToRow rl n
   , DiffVariantF n n' rl rl'
   , RowToList n' rl'
-  , RowCons sym (FProxy f') n' r'
-  , Union n m r
-  , Union n' m' r'
+  , Row.Cons sym (FProxy f') n' r'
+  , Row.Union n m r
+  , Row.Union n' m' r'
   ) => DiffVariantF r r' (Cons sym (FProxy f) rl) (Cons sym (FProxy f') rl') where
     upV _ (Tuple v x) = handleThis handleOther $ force v
       where
@@ -313,14 +313,14 @@ topRec ::
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
   ZRec t -> t
-topRec z = upRec z # either id topRec
+topRec z = upRec z # either identity topRec
 
 downIntoRec ::
   forall t f f'.
     Recursive t f => Corecursive t f =>
     Functor f => Diff1 f f' =>
   (f ~> Maybe) -> ZRec t -> ZRec t
-downIntoRec f z = maybe z id (f (downRec z))
+downIntoRec f z = maybe z identity (f (downRec z))
 
 _contextRec :: forall t. Lens' (ZRec t) (List (DF (Alg t) t))
 _contextRec = lens (\(c :<<~: _) -> c)

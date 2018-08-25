@@ -2,13 +2,13 @@ module Component where
 
 import Prelude
 
-import Combinators (aTypeName, aTypeVar)
+import Combinators (aTypeVar)
 import Control.Alt ((<|>))
-import Control.Monad.Aff (Aff)
-import DOM (DOM)
+import Effect.Aff (Aff)
+
 import Data.Array (filter, foldr, intercalate)
 import Data.Array as Array
-import Data.Char (fromCharCode, toUpper)
+import Data.Char (fromCharCode)
 import Data.Char.Unicode (isAlphaNum, isSpace)
 import Data.Const (Const(..))
 import Data.Functor.Mu (roll)
@@ -17,9 +17,9 @@ import Data.Lens (ALens', Prism', Traversal', _1, _2, anyOf, cloneLens, iso, pre
 import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
 import Data.Lens.Suggestion (Lens', lens, suggest)
-import Data.Maybe (Maybe(..), fromMaybe)
-import Data.String (joinWith, singleton, uncons)
-import Data.String.CodePoints as Str
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.String (joinWith, singleton, uncons, toUpper)
+import Data.String as Str
 import Data.String.Regex (split) as Re
 import Data.String.Regex.Flags (unicode) as Re
 import Data.String.Regex.Unsafe (unsafeRegex) as Re
@@ -32,15 +32,15 @@ import Halogen.HTML.Lens as HL
 import Halogen.HTML.Lens.Button as HL.Button
 import Halogen.HTML.Lens.Checkbox as HL.Checkbox
 import Halogen.HTML.Lens.Input as HL.Input
-import Halogen.HTML.Properties as HP
 import Reprinting (showAType, showDataType)
 import Types (ATypeV, DataType(..), DataTypeDecl, DataTypeDef(..), Proper(..), Ident(..), Qualified(..), TypeAbses, TypeAbs(..), declKeyword)
 import Types as T
-import Prim.Repr (primKinds)
+import Repr.Prim (primKinds)
+import Data.Enum (fromEnum)
 
 type Query = HL.Query State
 
-type Element p = H.HTML p Query
+type Element p = HH.HTML p (Query Unit)
 
 type Annotation =
   { name :: String
@@ -94,8 +94,8 @@ ccwords = filter (not eq "") <<< Re.split re
 toName :: String -> String
 toName = firstpart >>> words >>> exclude >>> map camel >>> joinWith ""
     where
-    unsafeChar = Str.codePointToInt >>> fromCharCode
-    firstpart = Str.takeWhile $ unsafeChar >>> (isAlphaNum || isSpace)
+    unsafeChar = fromEnum >>> fromCharCode
+    firstpart = Str.takeWhile $ unsafeChar >>> maybe false (isAlphaNum || isSpace)
     blacklist = ["this","the","a","an","it"]
     exclude ws =
         foldr (\w -> filter (not eq w <<< Str.toLower)) ws blacklist
@@ -103,7 +103,7 @@ toName = firstpart >>> words >>> exclude >>> map camel >>> joinWith ""
         case uncons s of
             Nothing -> s
             Just { head, tail } ->
-                (head # toUpper # singleton) <> tail
+                (head # singleton # toUpper) <> tail
 
 _suggestDescription :: Lens' State String
 _suggestDescription = suggest _description toName (_name <<< iso show Proper)
@@ -125,13 +125,15 @@ _isTypeAlias = lens
 typeComponent :: forall p. State -> Element p
 typeComponent = HL.Checkbox.renderAsField "Simple type alias" _isTypeAlias
 
-component :: forall eff. H.Component HH.HTML Query Unit Void (Aff (dom :: DOM | eff))
+component :: H.Component HH.HTML Query Unit Void Aff
 component =
-  H.parentComponent
+  H.component
     { initialState: const initialState
     , render
     , eval
     , receiver: const Nothing
+    , initializer: Nothing
+    , finalizer: Nothing
     }
   where
 
@@ -155,7 +157,7 @@ component =
             ]
     }
 
-  render :: State -> H.ParentHTML Query (Const Void) Unit (Aff (dom :: DOM | eff))
+  render :: State -> H.ComponentHTML Query () Aff
   render state@{ description, datatype } =
     HH.div_
       [ HH.h1_
@@ -179,7 +181,7 @@ component =
               HH.div_ [HH.text $ showAType arg]
 
 
-  eval :: Query ~> H.ParentDSL State Query (Const Void) Unit Void (Aff (dom :: DOM | eff))
+  eval :: Query ~> H.HalogenM State Query () Void Aff
   eval = HL.eval
 
 traversalDefault :: forall a b. b -> Traversal' a b -> Lens' a b
@@ -197,21 +199,21 @@ tryDeleteAt i = fromMaybe <*> Array.deleteAt i
 
 renderField :: forall p. Int -> State -> ALens' State Annotation -> Array (Element p)
 renderField i state alens =
-  [ HL.Button.renderAsField "\x2212" (id {-_constructors %~ tryDeleteAt i-}) false
+  [ HL.Button.renderAsField "\x2212" (identity {-_constructors %~ tryDeleteAt i-}) false
   , HH.text " "
   , HL.Input.render _suggestTyp state
   , HH.text " :: "
-  , HL.Input.render _typ state
+  , HL.Input.render _thistyp state
   ]
   where
     thislens :: Lens' State Annotation
     thislens = cloneLens alens
-    _name :: Lens' State String
-    _name = thislens <<< prop (SProxy :: SProxy "name")
-    _typ :: Lens' State String
-    _typ = thislens <<< prop (SProxy :: SProxy "typ")
+    _thisname :: Lens' State String
+    _thisname = thislens <<< prop (SProxy :: SProxy "name")
+    _thistyp :: Lens' State String
+    _thistyp = thislens <<< prop (SProxy :: SProxy "typ")
     _suggestTyp :: Lens' State String
-    _suggestTyp = suggest _name id _typ
+    _suggestTyp = suggest _thisname identity _thistyp
 
 showField :: Annotation -> String
 showField { name, typ } = name <> " :: " <> typ

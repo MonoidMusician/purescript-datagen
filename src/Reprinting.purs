@@ -5,7 +5,7 @@ import Prelude
 import Annot (Annot(..), mayNeedAppParen, mayNeedFnParen)
 import Control.Comonad.Cofree (Cofree, head, (:<))
 import Control.Comonad.Env (EnvT(..))
-import Control.Monad.State (State, gets, modify, runState)
+import Control.Monad.State (State, gets, modify_, runState)
 import Data.Bifunctor (lmap, rmap)
 import Data.Const (Const(..))
 import Data.Function (on)
@@ -14,9 +14,8 @@ import Data.Functor.Variant (VariantF)
 import Data.Functor.Variant as VF
 import Data.Identity (Identity(..))
 import Data.List.Lazy as List
-import Data.Map (toAscUnfoldable) as Map
+import Data.Map (toUnfoldable) as Map
 import Data.Maybe (Maybe(..), maybe)
-import Data.Monoid (class Monoid, mempty)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (un, unwrap)
 import Data.Pair (Pair(..))
@@ -31,6 +30,7 @@ import Printing (joinWithIfNE)
 import Recursion (Alg, modifyHead, rewrap, whileAnnotatingDown)
 import Types (AKindVF, ATypeV, ATypeVF, DataType(..), DataTypeDecls, DataTypeDef(..), ModuleData, TypeAbs(..), AKindVMF, _app, _fun, _name, _row, _var, declKeyword, showImportModules)
 import Zippers (class Diff1, DF, ParentCtxs, ZRec, fromDF, fromParentCtx, toDF, toParentCtx, (:<<~:))
+import Prim.Row as Row
 
 -- | A tag consists of the following:
 -- |   1. the starting index *relative to the parent*
@@ -68,7 +68,7 @@ recur (Tuple s r) = do
   pure $ Tuple offset (length s) :< r
 
 literal :: forall m. Monoid m => m -> State m Unit
-literal s = modify (_ <> s)
+literal s = modify_ (_ <> s)
 
 simple :: forall f m. Functor f =>
   f Void -> m -> Tuple m (Untagged f)
@@ -77,7 +77,7 @@ simple v s = Tuple s $ map absurd v
 simpleShowConst ::
   forall a b sym bleh row.
     IsSymbol sym =>
-    RowCons sym (FProxy (Const a)) bleh row =>
+    Row.Cons sym (FProxy (Const a)) bleh row =>
     Show a =>
   SProxy sym -> Const a b -> Tuple String (Untagged (VariantF row))
 simpleShowConst k v = simple (VF.inj k $ rewrap v) $ show $ unwrap v
@@ -271,7 +271,7 @@ showDataType (SumType m) = joinWith " | " $
     show c <> joinWithIfNE " " (showAType' (Just FnAppParen)) ts
 
 showDataTypeDecls :: DataTypeDecls -> String
-showDataTypeDecls = joinWith "\n" <<< Map.toAscUnfoldable >>> map
+showDataTypeDecls = joinWith "\n" <<< Map.toUnfoldable >>> map
   \(Tuple name (DataTypeDef vs dt)) ->
     let vars = joinWithIfNE " " showTypeAbs vs in
     show (declKeyword dt) <> " " <> show name <> vars <> " = " <> showDataType dt

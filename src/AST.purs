@@ -8,24 +8,22 @@ import Combinators (aTypeApp, aTypeFunction, aTypeName, certainty, chainr)
 import Complex.Validation as CV
 import Control.Comonad (extract)
 import Control.Comonad.Env (EnvT(..))
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (log)
-import Control.Monad.Eff.Unsafe (unsafeCoerceEff)
+import Effect.Aff (Aff)
+import Effect (Effect)
+import Effect.Console (log)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.MonadZero (guard)
-import DOM (DOM)
-import DOM.Event.Event (stopPropagation)
-import DOM.Event.KeyboardEvent (key)
-import DOM.Event.Types (Event, KeyboardEvent, mouseEventToEvent)
-import DOM.HTML (window)
-import DOM.HTML.Location (href)
-import DOM.HTML.Window (location)
+import Web.Event.Event (Event, stopPropagation)
+import Web.UIEvent.KeyboardEvent (key, KeyboardEvent)
+import Web.UIEvent.MouseEvent as MouseEvent
+import Web.HTML (window)
+import Web.HTML.Location (href)
+import Web.HTML.Window (location)
 import Data.Array (mapMaybe)
 import Data.Array.NonEmpty as NEA
 import Data.Codec (decode)
 import Data.Const (Const(..))
-import Data.Either (Either(..), fromRight)
+import Data.Either (Either(..), hush)
 import Data.Foldable (fold)
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Mu (Mu(..), roll, unroll)
@@ -36,8 +34,7 @@ import Data.Lens (Lens', is, modifying, use, (.=), (.~), (^.))
 import Data.Lens.Record (prop)
 import Data.List.Lazy (nil, uncons, (:))
 import Data.Map (empty, toUnfoldable, union)
-import Data.Maybe (Maybe(..), isNothing, maybe, maybe')
-import Data.Monoid (mempty)
+import Data.Maybe (Maybe(..), isNothing, maybe, maybe', fromJust)
 import Data.Newtype (over, un, unwrap, wrap)
 import Data.NonEmpty ((:|))
 import Data.Pair (Pair(..))
@@ -49,7 +46,6 @@ import Data.Variant as V
 import Externs.Codec.TypeData (TypeKindData, codecTypeKindData)
 import Halogen as H
 import Halogen.Aff (awaitBody, runHalogenAff)
-import Halogen.Aff.Driver (HalogenEffects)
 import Halogen.Autocomplete.Component (Message(..))
 import Halogen.Autocomplete.Component as Autocomplete
 import Halogen.HTML as HH
@@ -62,9 +58,10 @@ import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 import KindChecking (inferKindHole, inferKindM, matchPartialKind, showKindError)
 import Matryoshka (class Recursive)
-import Network.HTTP.Affjax (AJAX, get)
+import Affjax (get) as Affjax
+import Affjax.ResponseFormat (json) as Affjax
 import Partial.Unsafe (unsafePartial)
-import Prim.Repr (primTypesMap)
+import Repr.Prim (primTypesMap)
 import Recursion (rewrap, whileAnnotatingDown)
 import Reprinting (ATypeVC, showAKind, showAKindM)
 import Types (AKindV, ATypeV, ATypeVF, ATypeVM, ATypeVMF, Proper(..), Qualified(..), _app, _fun, _name, _var)
@@ -84,8 +81,10 @@ data Query a
  | FromAutocomplete (Autocomplete.Message Suggestion) a
  | StopPropagation Event (Query a)
 
-type Element p = H.HTML p Query
-type Slot = Unit
+type Element p = HH.HTML p (Query Unit)
+type Slot =
+  ( autocomplete :: H.Slot (Autocomplete.Query Suggestion) (Autocomplete.Message Suggestion) Unit
+  )
 
 atnunqp :: String -> ATypeV
 atnunqp = aTypeName <<< Unqualified <<< Proper
@@ -196,9 +195,9 @@ navRight zipper = rightIsm (downRec zipper) #
             then navUp z
             else orGetParent (navUp z)
 
-component :: forall eff. H.Component HH.HTML Query (ZRec ATypeVM) (ZRec ATypeVM) (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
+component :: H.Component HH.HTML Query (ZRec ATypeVM) (ZRec ATypeVM) (ReaderT TypeKindData Aff)
 component =
-  H.lifecycleParentComponent
+  H.component
     { initialState
     , render
     , eval
@@ -216,7 +215,7 @@ component =
     , types: mempty
     }
 
-  render :: State -> H.ParentHTML Query (Autocomplete.Query Suggestion) Slot (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
+  render :: State -> H.ComponentHTML Query Slot (ReaderT TypeKindData Aff)
   render state@{ typ: typ@(pars :<<~: _), unicode: u, types: items } =
     HH.div
       [ HE.onKeyUp (HE.input KeyPress)
@@ -239,7 +238,7 @@ component =
       , HH.div_ -- editing
         [ Lensy <$> HL.Button.renderAsField "Hole" (_typ <<< _focusRec .~ hole) false
         , HH.br_
-        , HH.slot unit (Autocomplete.component customElemConf) filtered (HE.input FromAutocomplete)
+        , HH.slot (SProxy :: SProxy "autocomplete") unit (Autocomplete.component customElemConf) filtered (HE.input FromAutocomplete)
         , Lensy <$> HL.Input.renderAsField "Name" (prop (SProxy :: SProxy "imput")) state
         , Lensy <$> HL.Button.renderAsField "Name" (\s@{imput, typ:(cxs :<<~: _)} -> (_typ .~ (cxs :<<~: node (unsafeName Unqualified imput))) s) false
         , HH.div_ functions
@@ -308,28 +307,28 @@ component =
           CV.Success Nothing -> HH.text $ "No inferrable kind"
 
 
-  eval :: Query ~> H.ParentDSL State Query (Autocomplete.Query Suggestion) Slot (ZRec ATypeVM) (ReaderT TypeKindData (Aff (dom :: DOM | eff)))
+  eval :: Query ~> H.HalogenM State Query Slot (ZRec ATypeVM) (ReaderT TypeKindData Aff)
   eval (Init a) = a <$ do
     tys <- H.lift ask
     H.modify _ { types = tys }
   eval (Lensy q) = HL.eval q
   eval (KeyPress e a) = a <$ do
-    H.liftEff $ unsafeCoerceEff $ log $ unsafeCoerce e
+    H.liftEffect $ log $ unsafeCoerce e
     modifying _typ case key e of
       "ArrowUp" -> navUp
       "ArrowDown" -> navDown
       "ArrowLeft" -> navLeft
       "ArrowRight" -> navRight
-      _ -> id
+      _ -> identity
   eval (FromAutocomplete (Changed s) a) = pure a
   eval (FromAutocomplete (Selected { expr, name: q }) a) = do
     (_typ <<< _focusRec) .= expr
-    _ <- H.query unit (Autocomplete.Input "" unit)
-    _ <- H.query unit (Autocomplete.Close (Autocomplete.CuzSelect (show q)) unit)
+    _ <- H.query (SProxy :: SProxy "autocomplete") unit (Autocomplete.Input "" unit)
+    _ <- H.query (SProxy :: SProxy "autocomplete") unit (Autocomplete.Close (Autocomplete.CuzSelect (show q)) unit)
     use _typ >>= H.raise
     pure a
   eval (StopPropagation e q) = do
-    H.liftEff $ stopPropagation e
+    H.liftEffect $ stopPropagation e
     eval q
 
 renderZipper :: forall p. Boolean -> ZRec ATypeVM -> Element p
@@ -366,7 +365,7 @@ renderZipper u zipper =
 
 addEvent :: forall p. ZRec ATypeVM -> String -> Element p
 addEvent z = HH.span
-  [ HE.onClick (HE.input \e -> StopPropagation (mouseEventToEvent e) <<< Lensy <<< HL.UpdateState (pure $ _typ .~ z))
+  [ HE.onClick (HE.input \e -> StopPropagation (MouseEvent.toEvent e) <<< Lensy <<< HL.UpdateState (pure $ _typ .~ z))
   , HP.class_ $ wrap "clickable"
   , HP.title $ renderStr true $ z ^. _focusRec
   ] <<< pure <<< HH.text
@@ -420,18 +419,18 @@ render1 arr w u ann = unwrap >>> case _ of
     }
 
 render1Str :: Boolean -> Maybe Annot -> ATypeVMF String -> String
-render1Str u = render1 fold id u
+render1Str u = render1 fold identity u
 renderStr :: forall t. Recursive t ATypeVMF => Boolean -> t -> String
 renderStr u = whileAnnotatingDown Nothing annotPrec (render1Str u)
 
 wrapIf :: forall ann e. ann -> (String -> e) -> (ann -> Boolean) -> Array e -> Array e
 wrapIf ann w f cs = if f ann then ([w "("] <> cs <> [w ")"]) else cs
 
-main :: Eff (HalogenEffects ( ajax :: AJAX )) Unit
+main :: Effect Unit
 main = runHalogenAff do
   body <- awaitBody
-  url <- H.liftEff (window >>= location >>= href)
+  url <- H.liftEffect (window >>= location >>= href)
   let typesUrl = replace (Pattern "ast.html") (Replacement "types.json") url
-  typeData <- get typesUrl <#> _.response
-  let types = unsafePartial fromRight (decode codecTypeKindData typeData)
+  typeData <- Affjax.get Affjax.json typesUrl <#> _.body
+  let types = unsafePartial fromJust ((hush <<< decode codecTypeKindData) =<< hush typeData)
   runUI (H.hoist (runReaderT <@> union types primTypesMap) component) (tipRec hole) body

@@ -10,7 +10,7 @@ import Data.Codec.Argonaut (JsonDecodeError(..), jarray)
 import Data.Codec.Argonaut.Record (record)
 import Data.Either (Either(..), hush, note)
 import Data.Map (Map, fromFoldable, filterKeys)
-import Data.StrMap as StrMap
+import Foreign.Object as Foreign.Object
 import Data.Traversable (sequence, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant)
@@ -71,12 +71,12 @@ type ExternsDeclaration = Variant
 
 
 prop :: String -> Json -> Either JsonDecodeError Json
-prop i = A.foldJsonObject (Left (TypeMismatch "Object"))
-  (StrMap.lookup i >>> note (AtKey i MissingValue))
+prop i = A.caseJsonObject (Left (TypeMismatch "Object"))
+  (Foreign.Object.lookup i >>> note (AtKey i MissingValue))
 
 extractTypes :: Array Json -> Either JsonDecodeError (Map Proper AKindV)
 extractTypes = compose (map (fromFoldable <<< map conv <<< catMaybes)) <<< traverse $
-  (A.toObject >=> StrMap.lookup "EDType" >=> A.toObject >>> map
+  (A.toObject >=> Foreign.Object.lookup "EDType" >=> A.toObject >>> map
     (decode (record {edTypeName: codecProper, edTypeKind: codecAKindV}))) >>> sequence
   where
     conv {edTypeName, edTypeKind} = Tuple edTypeName edTypeKind

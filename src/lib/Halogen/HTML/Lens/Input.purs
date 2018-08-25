@@ -5,31 +5,29 @@ module Halogen.HTML.Lens.Input
 
 import Prelude
 import Halogen.HTML.Lens (Query(..))
-import DOM.Event.Event as Event
-import DOM.HTML.HTMLInputElement as HInput
+import Web.Event.Event as Event
+import Web.HTML.HTMLInputElement as HInput
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Control.Monad.Eff (Eff)
+import Effect (Effect)
 import Control.Monad.Except (runExcept)
-import DOM (DOM)
-import DOM.Event.Types (Event)
-import DOM.HTML.Types (readHTMLInputElement)
-import Data.Either (Either(..))
-import Data.Foreign (toForeign)
+
+import Web.Event.Event (Event)
+import Data.Maybe (Maybe(..))
 import Data.Lens ((.~), (^.))
 import Data.Lens.Types (Lens')
 
-type Property s p = H.IProp p (Query s)
-type Element s p = H.HTML p (Query s)
+type Property s p = HH.IProp p (Query s Unit)
+type Element s p = HH.HTML p (Query s Unit)
 
-setter :: forall s eff. Lens' s String -> Event -> Eff (dom :: DOM | eff) (s -> s)
+setter :: forall s. Lens' s String -> Event -> Effect (s -> s)
 setter lens e =
-    case runExcept $ readHTMLInputElement $ toForeign $ Event.target e of
-        Left _ -> pure id
-        Right node -> do
-            value <- H.liftEff $ HInput.value node
+    case HInput.fromEventTarget =<< Event.target e of
+        Nothing -> pure identity
+        Just node -> do
+            value <- H.liftEffect $ HInput.value node
             pure (lens .~ value)
 
 query :: forall s a. Lens' s String -> Event -> a -> Query s a
