@@ -11,10 +11,16 @@ data Name
   | MkString Name String
   | MkNumeral Name Int
 
-nameParts :: Name -> Array (Either String Int)
-nameParts Anonymous = []
-nameParts (MkString n s) = snoc (nameParts n) (Left s)
-nameParts (MkNumeral n i) = snoc (nameParts n) (Right i)
+derive instance eqName :: Eq Name
+derive instance ordName :: Ord Name
+
+parts :: Name -> Array (Either String Int)
+parts Anonymous = []
+parts (MkString n s) = snoc (parts n) (Left s)
+parts (MkNumeral n i) = snoc (parts n) (Right i)
+
+fromString :: String -> Name
+fromString s = MkString Anonymous s
 
 instance showName :: Show Name where
-  show = nameParts >>> map (either identity show) >>> joinWith "."
+  show = parts >>> map (either identity show) >>> joinWith "."

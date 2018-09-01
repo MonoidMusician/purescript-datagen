@@ -13,6 +13,9 @@ data Level
   | Param Name
   | MVar Name
 
+derive instance eqLevel :: Eq Level
+derive instance ordLevel :: Ord Level
+
 compute :: Level -> Maybe Int
 compute = case _ of
   Zero -> Just 0
